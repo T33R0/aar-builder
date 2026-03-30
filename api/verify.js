@@ -8,8 +8,8 @@ module.exports = async function handler(req, res) {
     try { body = JSON.parse(body); } catch (e) { body = {}; }
   }
 
-  const password = (body && body.password) || '';
-  const correct = process.env.AAR_PASSWORD;
+  const password = ((body && body.password) || '').trim();
+  const correct = (process.env.AAR_PASSWORD || '').trim();
 
   if (!correct) {
     return res.status(500).json({ error: 'Server misconfigured' });
