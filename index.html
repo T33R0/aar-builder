@@ -33,10 +33,11 @@
   --header-h: 60px;
 }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+/* CHANGE 3: Dashboard non-scrollable */
+body.on-dashboard { overflow: hidden; }
 /* Header */
 .app-header { position: fixed; top: 0; left: 0; right: 0; height: var(--header-h); background: var(--primary); color: var(--white); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
 .app-header h1 { font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
-.app-header h1 span { color: var(--secondary); }
 .header-actions { display: flex; align-items: center; gap: 12px; }
 .header-actions select { padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: var(--white); font-size: 13px; cursor: pointer; max-width: 180px; }
 .header-actions select option { color: var(--text); background: var(--white); }
@@ -71,7 +72,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helv
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
 label { display: block; font-size: 13px; font-weight: 600; color: var(--gray-700); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-input[type="text"], input[type="email"], input[type="date"], input[type="number"], select, textarea {
+input[type="text"], input[type="email"], input[type="date"], input[type="number"], input[type="time"], select, textarea {
   width: 100%; padding: 10px 14px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px; font-family: inherit; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s;
 }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--secondary); box-shadow: 0 0 0 3px rgba(0,114,206,0.12); }
@@ -231,15 +232,13 @@ textarea { resize: vertical; min-height: 80px; }
 input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-300); border-radius: 6px; cursor: pointer; padding: 2px; }
 /* Logo preview */
 .logo-preview { max-width: 200px; max-height: 80px; margin-top: 8px; border-radius: 6px; border: 1px solid var(--gray-300); }
-/* JSON import/export buttons in header */
-.json-btns { display: flex; gap: 4px; }
 /* Dashboard styles */
 .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .dashboard-header h2 { font-size: 26px; font-weight: 700; color: var(--primary); }
 .dashboard-filters { display: flex; gap: 8px; margin-bottom: 24px; }
 .dashboard-filters button { padding: 8px 18px; border-radius: 8px; border: 2px solid var(--gray-300); background: var(--white); color: var(--gray-600); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
 .dashboard-filters button.active { border-color: var(--primary); background: var(--primary); color: var(--white); }
-.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; max-height: calc(100vh - var(--header-h) - 160px); overflow-y: auto; }
 .aar-card { background: var(--white); border: 2px solid var(--gray-200); border-radius: 12px; padding: 24px; transition: all 0.2s; cursor: pointer; position: relative; }
 .aar-card:hover { border-color: var(--secondary); box-shadow: 0 4px 12px rgba(0,114,206,0.1); transform: translateY(-2px); }
 .aar-card-title { font-size: 16px; font-weight: 700; color: var(--primary); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -263,22 +262,36 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
 .preview-fouo { color: var(--red); font-weight: 700; border-top: 2px solid var(--red); border-bottom: 2px solid var(--red); padding: 6px 0; margin-top: 16px; font-size: 13px; }
 /* Template badge on dashboard cards */
 .template-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: var(--gray-200); color: var(--gray-600); }
+/* CHANGE 9: Settings tab CSS */
+.settings-tab { padding: 10px 18px; border: none; background: none; font-size: 14px; font-weight: 600; color: var(--gray-500); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+.settings-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.settings-tab:hover { color: var(--text); }
+.settings-panel { display: none; }
+.settings-panel.active { display: block; }
 </style>
 </head>
 <body>
 
-<!-- Header -->
+<!-- CHANGE 1: Auth Gate -->
+<div id="authGate" style="position:fixed;inset:0;background:var(--primary);z-index:999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:var(--white);border-radius:16px;padding:40px;max-width:400px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <h1 style="font-size:24px;color:var(--primary);margin-bottom:8px;">&#9670; AAR Builder</h1>
+    <p style="font-size:14px;color:var(--gray-500);margin-bottom:24px;">Enter password to continue</p>
+    <input type="password" id="authPassword" placeholder="Password" style="width:100%;padding:12px 16px;border:2px solid var(--gray-300);border-radius:8px;font-size:16px;margin-bottom:16px;" onkeypress="if(event.key==='Enter')verifyAuth()">
+    <button class="btn btn-primary btn-lg" style="width:100%;" onclick="verifyAuth()">Sign In</button>
+    <p id="authError" style="color:var(--red);font-size:13px;margin-top:12px;display:none;">Incorrect password</p>
+  </div>
+</div>
+
+<!-- CHANGE 2: Header — cleaned up, no export/import buttons, icon-only home, save has id -->
 <header class="app-header">
-  <h1>&#9670; AAR <span>Builder</span></h1>
+  <h1 style="color:var(--white);">&#9670; AAR Builder</h1>
   <div class="header-actions">
-    <div class="autosave-indicator" id="autosaveIndicator">Auto-saved</div>
-    <button class="btn-header" id="headerHomeBtn" onclick="showDashboard()">&#127968; Home</button>
-    <button class="btn-header" onclick="saveDraft()">&#128190; Save Draft</button>
-    <button class="btn-header" onclick="exportJSON()">&#8599; Export JSON</button>
-    <button class="btn-header" onclick="document.getElementById('jsonImportInput').click()">&#8601; Import JSON</button>
-    <input type="file" id="jsonImportInput" accept=".json" style="display:none" onchange="importJSON(event)">
+    <div class="autosave-indicator" id="autosaveIndicator" style="display:none;">Auto-saved</div>
+    <button class="btn-header" id="headerSaveBtn" style="display:none;" onclick="saveDraft()">&#128190; Save</button>
+    <button class="btn-header" id="headerHomeBtn" onclick="showDashboard()" title="Home">&#127968;</button>
     <button class="gear-btn" onclick="openFeedback()" title="Feedback">&#128172;</button>
-    <button class="gear-btn" onclick="openSettings()" title="Brand Settings">&#9881;</button>
+    <button class="gear-btn" onclick="openSettings()" title="Settings">&#9881;</button>
   </div>
 </header>
 
@@ -758,7 +771,8 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
           </div>
           <div class="form-group">
             <label for="sEventTime">Time</label>
-            <input type="text" id="sEventTime" placeholder="e.g., 15:00">
+            <!-- CHANGE 12: type="time" -->
+            <input type="time" id="sEventTime">
           </div>
           <div class="form-group">
             <label for="sDrillDuration">Duration</label>
@@ -793,7 +807,7 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
     <!-- Step S2: Findings & Recommendations -->
     <section class="step-panel" id="stepS2">
       <h2 class="step-title">Findings & Recommendations</h2>
-      <p class="step-subtitle">Document each finding with its recommendation. Findings are lettered (A, B, C...).</p>
+      <p class="step-subtitle">Document each finding with its recommendation.</p>
 
       <div id="findingsContainer"></div>
       <button class="btn btn-secondary btn-sm" onclick="addFinding()" style="margin-top:12px;">+ Add Finding</button>
@@ -915,65 +929,148 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
   </div>
 </div>
 
-<!-- Settings Modal -->
+<!-- CHANGE 9: Settings Modal — Overhauled with tabs -->
 <div class="modal-overlay" id="settingsModal">
-  <div class="modal">
-    <h2>&#9881; Brand Settings</h2>
-    <div class="form-group">
-      <label for="brandOrgName">Organization Name</label>
-      <input type="text" id="brandOrgName" value="UCHealth">
+  <div class="modal" style="max-width:640px;">
+    <h2>&#9881; Settings</h2>
+    <div class="settings-tabs" style="display:flex; gap:0; margin-bottom:20px; border-bottom:2px solid var(--gray-200);">
+      <button class="settings-tab active" data-tab="branding" onclick="switchSettingsTab('branding')">Branding</button>
+      <button class="settings-tab" data-tab="formatting" onclick="switchSettingsTab('formatting')">Formatting</button>
+      <button class="settings-tab" data-tab="longform" onclick="switchSettingsTab('longform')">Long Form</button>
+      <button class="settings-tab" data-tab="shortform" onclick="switchSettingsTab('shortform')">Short Form</button>
     </div>
-    <div class="form-group">
-      <label for="brandLogo">Logo Upload</label>
-      <input type="file" id="brandLogo" accept="image/*" onchange="handleLogoUpload(event)">
-      <img id="logoPreview" class="logo-preview" style="display:none;">
-    </div>
-    <div class="form-row">
+
+    <!-- Branding Tab -->
+    <div class="settings-panel active" id="settingsPanel-branding">
       <div class="form-group">
-        <label for="brandPrimaryColor">Primary Color</label>
-        <input type="color" id="brandPrimaryColor" value="#003B71">
+        <label for="brandOrgName">Organization Name</label>
+        <input type="text" id="brandOrgName" value="UCHealth">
       </div>
       <div class="form-group">
-        <label for="brandSecondaryColor">Secondary Color</label>
-        <input type="color" id="brandSecondaryColor" value="#0072CE">
+        <label for="brandLogo">Logo Upload</label>
+        <input type="file" id="brandLogo" accept="image/*" onchange="handleLogoUpload(event)">
+        <img id="logoPreview" class="logo-preview" style="display:none;">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="brandPrimaryColor">Primary Color</label>
+          <input type="color" id="brandPrimaryColor" value="#003B71">
+        </div>
+        <div class="form-group">
+          <label for="brandSecondaryColor">Secondary Color</label>
+          <input type="color" id="brandSecondaryColor" value="#0072CE">
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="brandFOUO"> Include "For Official Use Only" marking
+        </label>
+      </div>
+      <div class="form-group">
+        <label for="brandDefaultDept">Default Department</label>
+        <input type="text" id="brandDefaultDept" placeholder="e.g., Emergency Management">
+      </div>
+
+      <!-- JSON import/export moved here from header -->
+      <div class="form-card" style="margin-top:16px; padding:16px;">
+        <h3 style="font-size:14px; margin-bottom:12px;">Data Import / Export</h3>
+        <div class="btn-group">
+          <button class="btn btn-outline btn-sm" onclick="exportJSON()">&#8599; Export JSON</button>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('jsonImportInput').click()">&#8601; Import JSON</button>
+          <input type="file" id="jsonImportInput" accept=".json" style="display:none" onchange="importJSON(event)">
+        </div>
       </div>
     </div>
-    <div class="form-group">
-      <label><input type="checkbox" id="brandFOUO"> Include "For Official Use Only" marking</label>
-    </div>
-    <div class="form-group">
-      <label for="brandDefaultDept">Default Department</label>
-      <input type="text" id="brandDefaultDept" placeholder="e.g., Emergency Management">
-    </div>
-    <div class="form-card" style="margin-top:16px; padding:16px;">
-      <h3 style="font-size:14px; margin-bottom:12px;">Assessment Framework</h3>
+
+    <!-- Formatting Tab -->
+    <div class="settings-panel" id="settingsPanel-formatting" style="display:none;">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="fmtFont">Font Family</label>
+          <select id="fmtFont">
+            <option value="Calibri">Calibri</option>
+            <option value="Arial">Arial</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Helvetica">Helvetica</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Cambria">Cambria</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="fmtJustify">Body Text Justification</label>
+          <select id="fmtJustify">
+            <option value="left">Left</option>
+            <option value="both">Justify</option>
+            <option value="center">Center</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="fmtHeaderLeft">Header - Left</label>
+          <input type="text" id="fmtHeaderLeft" placeholder="{orgName}">
+        </div>
+        <div class="form-group">
+          <label for="fmtHeaderRight">Header - Right</label>
+          <input type="text" id="fmtHeaderRight" placeholder="After-Action Report">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="fmtMargins">Page Margins</label>
+          <select id="fmtMargins">
+            <option value="narrow">Narrow (0.5")</option>
+            <option value="normal">Normal (1")</option>
+            <option value="wide">Wide (1.25")</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="fmtFindings">Findings Labeling</label>
+          <select id="fmtFindings">
+            <option value="letters">Letters (A, B, C)</option>
+            <option value="numbers">Numbers (1, 2, 3)</option>
+          </select>
+        </div>
+      </div>
       <div class="form-group">
-        <select id="brandFramework">
+        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="fmtPageNumbers" checked> Show page numbers in footer
+        </label>
+      </div>
+    </div>
+
+    <!-- Long Form Tab -->
+    <div class="settings-panel" id="settingsPanel-longform" style="display:none;">
+      <div class="form-group">
+        <label for="lfFramework">Assessment Framework</label>
+        <select id="lfFramework">
           <option value="fema">FEMA Core Capabilities</option>
           <option value="jc">Joint Commission Critical Areas</option>
         </select>
       </div>
-    </div>
-    <div class="form-card" style="margin-top:16px; padding:16px;">
-      <h3 style="font-size:14px; margin-bottom:12px;">Report Sections</h3>
-      <div style="display:grid; gap:8px;">
-        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="secTimeline" checked> Scenario Narrative / Timeline
-        </label>
-        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="secDecisions" checked> Key Decisions
-        </label>
-        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="secResourceGaps" checked> Resource Gaps
-        </label>
-        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="secCommIssues" checked> Communication Issues
-        </label>
-        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="secAcronyms" checked> Appendix C: Acronym List
-        </label>
+      <div class="form-card" style="margin-top:16px; padding:16px;">
+        <h3 style="font-size:14px; margin-bottom:12px;">Report Sections</h3>
+        <div style="display:grid; gap:8px;">
+          <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;"><input type="checkbox" id="secTimeline" checked> Scenario Narrative / Timeline</label>
+          <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;"><input type="checkbox" id="secDecisions" checked> Key Decisions</label>
+          <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;"><input type="checkbox" id="secResourceGaps" checked> Resource Gaps</label>
+          <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;"><input type="checkbox" id="secCommIssues" checked> Communication Issues</label>
+          <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;"><input type="checkbox" id="secAcronyms" checked> Appendix C: Acronym List</label>
+        </div>
       </div>
     </div>
+
+    <!-- Short Form Tab -->
+    <div class="settings-panel" id="settingsPanel-shortform" style="display:none;">
+      <p style="font-size:13px; color:var(--gray-600); margin-bottom:16px;">Short form always uses Joint Commission Critical Areas framework.</p>
+      <div class="form-group">
+        <label>JC Critical Areas Reference (used in corrective actions)</label>
+        <div style="font-size:13px; color:var(--gray-600); padding:12px; background:var(--gray-100); border-radius:8px;">
+          1. Communications<br>2. Staffing<br>3. Patient Clinical and Support Services<br>4. Safety and Security<br>5. Resources and Assets<br>6. Utilities
+        </div>
+      </div>
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeSettings()">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="saveSettings()">Save Settings</button>
@@ -1125,6 +1222,31 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
 
 <script>
 // ========================================
+// CHANGE 1: Auth verification
+// ========================================
+function verifyAuth() {
+  var pw = document.getElementById('authPassword').value;
+  fetch('/api/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: pw })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.success) {
+      sessionStorage.setItem('aar-auth', 'true');
+      document.getElementById('authGate').style.display = 'none';
+      initApp();
+    } else {
+      document.getElementById('authError').style.display = 'block';
+      document.getElementById('authPassword').value = '';
+      document.getElementById('authPassword').focus();
+    }
+  }).catch(function() {
+    document.getElementById('authError').textContent = 'Connection error';
+    document.getElementById('authError').style.display = 'block';
+  });
+}
+
+// ========================================
 // STATE
 // ========================================
 const APP_KEY = 'aar-builder-data';
@@ -1171,6 +1293,7 @@ let state = {
   correctiveActions: [],
 };
 
+// CHANGE 8: Expanded brand with formatting options
 let brand = {
   orgName: 'UCHealth',
   logoBase64: '',
@@ -1179,7 +1302,16 @@ let brand = {
   fouo: false,
   defaultDept: '',
   framework: 'fema',
-  sections: { timeline: true, decisions: true, resourceGaps: true, commIssues: true, acronyms: true }
+  sections: { timeline: true, decisions: true, resourceGaps: true, commIssues: true, acronyms: true },
+  formatting: {
+    fontFamily: 'Calibri',
+    bodyJustification: 'left',
+    headerLeft: '{orgName}',
+    headerRight: 'After-Action Report',
+    showPageNumbers: true,
+    findingsLabel: 'letters',
+    margins: 'normal',
+  }
 };
 
 let currentStep = 1;
@@ -1314,9 +1446,55 @@ function onFacilityChange(prefix) {
 }
 
 // ========================================
+// CHANGE 6: Finding label helpers
+// ========================================
+function getNextFindingLabel() {
+  if (brand.formatting && brand.formatting.findingsLabel === 'numbers') {
+    return String(state.findings.length + 1);
+  }
+  return 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[state.findings.length] || '';
+}
+
+function buildFindingLabelOptions(selected) {
+  if (brand.formatting && brand.formatting.findingsLabel === 'numbers') {
+    var opts = '<option value="">--</option>';
+    for (var i = 1; i <= 26; i++) opts += '<option value="' + i + '" ' + (selected == i ? 'selected' : '') + '>' + i + '</option>';
+    return opts;
+  }
+  var letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  var opts = '<option value="">--</option>';
+  for (var i = 0; i < letters.length; i++) opts += '<option value="' + letters[i] + '" ' + (selected === letters[i] ? 'selected' : '') + '>' + letters[i] + '</option>';
+  return opts;
+}
+
+// ========================================
+// CHANGE 11: History API helpers
+// ========================================
+function pushNavState(data) {
+  history.pushState(data, '');
+}
+
+window.addEventListener('popstate', function(e) {
+  if (!e.state) {
+    showDashboardNoHistory();
+    return;
+  }
+  if (e.state.dashboard) {
+    showDashboardNoHistory();
+  } else if (e.state.step) {
+    goToStepNoHistory(e.state.step);
+  }
+});
+
+// ========================================
 // DASHBOARD
 // ========================================
 function showDashboard() {
+  showDashboardNoHistory();
+  pushNavState({ dashboard: true });
+}
+
+function showDashboardNoHistory() {
   document.querySelector('.sidebar').style.display = 'none';
   document.querySelector('.main-content').style.marginLeft = '0';
   document.querySelectorAll('.step-panel').forEach(function(p) { p.classList.remove('active'); });
@@ -1324,6 +1502,11 @@ function showDashboard() {
   // Highlight Home button
   var homeBtn = document.getElementById('headerHomeBtn');
   if (homeBtn) homeBtn.classList.add('active');
+  // CHANGE 2: Hide save/autosave on dashboard
+  document.getElementById('headerSaveBtn').style.display = 'none';
+  document.getElementById('autosaveIndicator').style.display = 'none';
+  // CHANGE 3: Non-scrollable dashboard
+  document.body.classList.add('on-dashboard');
   renderDashboard();
 }
 
@@ -1420,6 +1603,11 @@ function enterWizard() {
   // Remove Home button highlight
   var homeBtn = document.getElementById('headerHomeBtn');
   if (homeBtn) homeBtn.classList.remove('active');
+  // CHANGE 2: Show save/autosave in wizard
+  document.getElementById('headerSaveBtn').style.display = '';
+  document.getElementById('autosaveIndicator').style.display = '';
+  // CHANGE 3: Remove non-scrollable
+  document.body.classList.remove('on-dashboard');
   // Hide ALL panels (both long and short form)
   document.querySelectorAll('.step-panel').forEach(function(p) { p.classList.remove('active'); });
   // Build sidebar for the right template
@@ -1445,6 +1633,8 @@ function enterWizard() {
   var cps = document.getElementById('completionPanelS');
   if (cps) cps.style.display = 'none';
   window.scrollTo(0, 0);
+  // CHANGE 11: Push wizard state
+  pushNavState({ step: 1, template: state.templateType });
 }
 
 function deleteDraft(id) {
@@ -1461,6 +1651,11 @@ function deleteDraft(id) {
 // NAVIGATION
 // ========================================
 function goToStep(n) {
+  goToStepNoHistory(n);
+  pushNavState({ step: n, template: state.templateType });
+}
+
+function goToStepNoHistory(n) {
   // Collect data from current step if in wizard
   var anyActive = false;
   document.querySelectorAll('.step-panel').forEach(function(p) {
@@ -1475,6 +1670,8 @@ function goToStep(n) {
   document.getElementById(stepId).classList.add('active');
   document.querySelector('.sidebar').style.display = '';
   document.querySelector('.main-content').style.marginLeft = '';
+  // CHANGE 3: remove on-dashboard when in wizard
+  document.body.classList.remove('on-dashboard');
   document.querySelectorAll('.sidebar-nav li').forEach(function(li) {
     li.classList.remove('active');
     if (parseInt(li.dataset.step) === n) li.classList.add('active');
@@ -1502,15 +1699,10 @@ function updateStepCompleteness() {
     if (nav[3]) { if (state.correctiveActions.length > 0) nav[3].classList.add('completed'); else nav[3].classList.remove('completed'); }
   } else {
     // Long form completeness
-    // Step 1 complete if title + type filled
     if (nav[0]) { if (state.eventTitle && state.eventType) nav[0].classList.add('completed'); else nav[0].classList.remove('completed'); }
-    // Step 2 complete if at least 1 participant
     if (nav[1]) { if (state.participants.length > 0) nav[1].classList.add('completed'); else nav[1].classList.remove('completed'); }
-    // Step 3 — optional
     if (nav[2]) { if (state.uploadedFiles.length > 0) nav[2].classList.add('completed'); else nav[2].classList.remove('completed'); }
-    // Step 4 complete if purpose or scope filled and at least 1 objective
     if (nav[3]) { if ((state.purpose || state.scope) && state.objectives.length > 0) nav[3].classList.add('completed'); else nav[3].classList.remove('completed'); }
-    // Step 5
     if (nav[4]) { if (state.actionItems.length > 0) nav[4].classList.add('completed'); else nav[4].classList.remove('completed'); }
   }
 }
@@ -1618,6 +1810,7 @@ function populateShortFormFields() {
 // SHORT FORM: OBJECTIVES
 // ========================================
 function addShortObjective(text) {
+  collectShortObjectives(); // CHANGE 4: collect before add
   state.shortObjectives.push(text || '');
   renderShortObjectives();
 }
@@ -1636,9 +1829,9 @@ function renderShortObjectives() {
 
 function collectShortObjectives() {
   var els = document.querySelectorAll('#shortObjectivesContainer .short-obj-text');
-  if (els.length > 0) {
-    state.shortObjectives = Array.from(els).map(function(el) { return el.value; });
-  }
+  // CHANGE 4: Guard against missing DOM
+  if (els.length === 0 && state.shortObjectives.length > 0) return;
+  state.shortObjectives = Array.from(els).map(function(el) { return el.value; });
 }
 
 function removeShortObjective(i) {
@@ -1651,12 +1844,13 @@ function removeShortObjective(i) {
 // SHORT FORM: FINDINGS
 // ========================================
 function addFinding(data) {
-  var letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  var f = data || { letter: letters[state.findings.length] || '', title: '', description: '', recommendation: '' };
+  collectFindings(); // CHANGE 4: collect before add
+  var f = data || { letter: getNextFindingLabel(), title: '', description: '', recommendation: '' };
   state.findings.push(f);
   renderFindings();
 }
 
+// CHANGE 6: Findings use select dropdown for letter/number
 function renderFindings() {
   var container = document.getElementById('findingsContainer');
   if (!container) return;
@@ -1665,8 +1859,9 @@ function renderFindings() {
     return;
   }
   container.innerHTML = state.findings.map(function(f, i) {
+    var labelWord = (brand.formatting && brand.formatting.findingsLabel === 'numbers') ? 'Number' : 'Letter';
     return '<div class="dynamic-item form-card"><div class="item-header"><h4>Finding ' + esc(f.letter) + '</h4><button class="remove-item" onclick="removeFinding(' + i + ')">&times;</button></div>' +
-      '<div class="form-row"><div class="form-group"><label>Letter</label><input type="text" class="finding-letter" value="' + esc(f.letter) + '" maxlength="3" style="width:80px;"></div><div class="form-group" style="flex:1;"><label>Title</label><input type="text" class="finding-title" value="' + esc(f.title) + '" placeholder="e.g., Strong and Timely Staff Response"></div></div>' +
+      '<div class="form-row"><div class="form-group"><label>' + labelWord + '</label><select class="finding-letter" style="width:80px;">' + buildFindingLabelOptions(f.letter) + '</select></div><div class="form-group" style="flex:1;"><label>Title</label><input type="text" class="finding-title" value="' + esc(f.title) + '" placeholder="e.g., Strong and Timely Staff Response"></div></div>' +
       '<div class="form-group"><label>Description</label><textarea class="finding-description" rows="4" placeholder="Describe what happened...">' + esc(f.description) + '</textarea></div>' +
       '<div class="form-group"><label>Recommendation</label><textarea class="finding-recommendation" rows="3" placeholder="What should be done?">' + esc(f.recommendation) + '</textarea></div></div>';
   }).join('');
@@ -1674,16 +1869,16 @@ function renderFindings() {
 
 function collectFindings() {
   var items = document.querySelectorAll('#findingsContainer .dynamic-item');
-  if (items.length > 0) {
-    state.findings = Array.from(items).map(function(el) {
-      return {
-        letter: el.querySelector('.finding-letter') ? el.querySelector('.finding-letter').value : '',
-        title: el.querySelector('.finding-title') ? el.querySelector('.finding-title').value : '',
-        description: el.querySelector('.finding-description') ? el.querySelector('.finding-description').value : '',
-        recommendation: el.querySelector('.finding-recommendation') ? el.querySelector('.finding-recommendation').value : '',
-      };
-    });
-  }
+  // CHANGE 4: Guard against missing DOM
+  if (items.length === 0 && state.findings.length > 0) return;
+  state.findings = Array.from(items).map(function(el) {
+    return {
+      letter: el.querySelector('.finding-letter') ? el.querySelector('.finding-letter').value : '',
+      title: el.querySelector('.finding-title') ? el.querySelector('.finding-title').value : '',
+      description: el.querySelector('.finding-description') ? el.querySelector('.finding-description').value : '',
+      recommendation: el.querySelector('.finding-recommendation') ? el.querySelector('.finding-recommendation').value : '',
+    };
+  });
 }
 
 function removeFinding(i) {
@@ -1696,6 +1891,7 @@ function removeFinding(i) {
 // SHORT FORM: TIMELINE
 // ========================================
 function addTimelineEntry(data) {
+  collectTimeline(); // CHANGE 4: collect before add
   var t = data || { time: '', elapsed: '', event: '', notes: '' };
   state.timeline.push(t);
   renderTimeline();
@@ -1717,16 +1913,16 @@ function renderTimeline() {
 
 function collectTimeline() {
   var items = document.querySelectorAll('#timelineContainer .dynamic-item');
-  if (items.length > 0) {
-    state.timeline = Array.from(items).map(function(el) {
-      return {
-        time: el.querySelector('.tl-time') ? el.querySelector('.tl-time').value : '',
-        elapsed: el.querySelector('.tl-elapsed') ? el.querySelector('.tl-elapsed').value : '',
-        event: el.querySelector('.tl-event') ? el.querySelector('.tl-event').value : '',
-        notes: el.querySelector('.tl-notes') ? el.querySelector('.tl-notes').value : '',
-      };
-    });
-  }
+  // CHANGE 4: Guard against missing DOM
+  if (items.length === 0 && state.timeline.length > 0) return;
+  state.timeline = Array.from(items).map(function(el) {
+    return {
+      time: el.querySelector('.tl-time') ? el.querySelector('.tl-time').value : '',
+      elapsed: el.querySelector('.tl-elapsed') ? el.querySelector('.tl-elapsed').value : '',
+      event: el.querySelector('.tl-event') ? el.querySelector('.tl-event').value : '',
+      notes: el.querySelector('.tl-notes') ? el.querySelector('.tl-notes').value : '',
+    };
+  });
 }
 
 function removeTimelineEntry(i) {
@@ -1739,11 +1935,14 @@ function removeTimelineEntry(i) {
 // SHORT FORM: CORRECTIVE ACTIONS
 // ========================================
 function addCorrectiveAction(data) {
+  collectCorrectiveActions(); // CHANGE 4: collect before add
+  collectFindings(); // CHANGE 4: also collect findings for dropdown data
   var ca = data || { finding: '', jcAreas: '', task: '', responsibleDept: '', targetDeadline: '' };
   state.correctiveActions.push(ca);
   renderCorrectiveActions();
 }
 
+// CHANGE 5: Show finding titles in corrective actions dropdown
 function renderCorrectiveActions() {
   var container = document.getElementById('correctiveActionsContainer');
   if (!container) return;
@@ -1751,8 +1950,11 @@ function renderCorrectiveActions() {
     container.innerHTML = '<p style="font-size:13px; color:var(--gray-500); padding:12px;">No corrective actions added.</p>';
     return;
   }
-  // Build finding options from state.findings
-  var findingOpts = '<option value="">--</option>' + state.findings.map(function(f) { return '<option value="' + esc(f.letter) + '">' + esc(f.letter) + '</option>'; }).join('');
+  // Build finding options from state.findings with titles
+  var findingOpts = '<option value="">--</option>' + state.findings.map(function(f) {
+    var label = f.letter + (f.title ? ': ' + f.title : '');
+    return '<option value="' + esc(f.letter) + '">' + esc(label) + '</option>';
+  }).join('');
 
   container.innerHTML = state.correctiveActions.map(function(ca, i) {
     return '<div class="dynamic-item" style="padding:14px;"><div class="item-header"><h4>Action ' + (i+1) + '</h4><button class="remove-item" onclick="removeCorrectiveAction(' + i + ')">&times;</button></div>' +
@@ -1764,17 +1966,17 @@ function renderCorrectiveActions() {
 
 function collectCorrectiveActions() {
   var items = document.querySelectorAll('#correctiveActionsContainer .dynamic-item');
-  if (items.length > 0) {
-    state.correctiveActions = Array.from(items).map(function(el) {
-      return {
-        finding: el.querySelector('.ca-finding') ? el.querySelector('.ca-finding').value : '',
-        jcAreas: el.querySelector('.ca-jc') ? el.querySelector('.ca-jc').value : '',
-        task: el.querySelector('.ca-task') ? el.querySelector('.ca-task').value : '',
-        responsibleDept: el.querySelector('.ca-dept') ? el.querySelector('.ca-dept').value : '',
-        targetDeadline: el.querySelector('.ca-deadline') ? el.querySelector('.ca-deadline').value : '',
-      };
-    });
-  }
+  // CHANGE 4: Guard against missing DOM
+  if (items.length === 0 && state.correctiveActions.length > 0) return;
+  state.correctiveActions = Array.from(items).map(function(el) {
+    return {
+      finding: el.querySelector('.ca-finding') ? el.querySelector('.ca-finding').value : '',
+      jcAreas: el.querySelector('.ca-jc') ? el.querySelector('.ca-jc').value : '',
+      task: el.querySelector('.ca-task') ? el.querySelector('.ca-task').value : '',
+      responsibleDept: el.querySelector('.ca-dept') ? el.querySelector('.ca-dept').value : '',
+      targetDeadline: el.querySelector('.ca-deadline') ? el.querySelector('.ca-deadline').value : '',
+    };
+  });
 }
 
 function removeCorrectiveAction(i) {
@@ -2149,6 +2351,7 @@ function buildCapabilityOptions(selected) {
 }
 
 function addObjective(data) {
+  collectObjectives(); // CHANGE 4: collect before add
   var obj = data || { description: '', coreCapability: '', rating: '', analysis: '' };
   state.objectives.push(obj);
   renderObjectives();
@@ -2198,7 +2401,8 @@ function renderObjectives() {
 
 function collectObjectives() {
   var items = document.querySelectorAll('#objectivesContainer .dynamic-item');
-  if (items.length === 0 && state.objectives.length > 0) return; // container not in DOM — preserve existing
+  // CHANGE 4: Guard against missing DOM
+  if (items.length === 0 && state.objectives.length > 0) return;
   state.objectives = Array.from(items).map(function(el, i) {
     var checkedRadio = el.querySelector('input[name="rating_obj_' + i + '"]:checked');
     return {
@@ -2229,7 +2433,8 @@ function buildObjectiveOptions(selected) {
 }
 
 function addStrength(data) {
-  collectObjectives();
+  collectObjectives(); // CHANGE 4: collect before add
+  collectStrengths(); // CHANGE 4: collect before add
   var s = data || { description: '', relatedObjective: '' };
   state.strengths.push(s);
   renderStrengths();
@@ -2262,7 +2467,8 @@ function renderStrengths() {
 
 function collectStrengths() {
   var items = document.querySelectorAll('#strengthsContainer .dynamic-item');
-  if (items.length === 0 && state.strengths.length > 0) return; // container not in DOM
+  // CHANGE 4: Guard against missing DOM
+  if (items.length === 0 && state.strengths.length > 0) return;
   state.strengths = Array.from(items).map(function(el) {
     return {
       description: el.querySelector('.str-description').value,
@@ -2282,7 +2488,8 @@ function removeStrength(i) {
 // AREAS FOR IMPROVEMENT
 // ========================================
 function addImprovement(data) {
-  collectObjectives();
+  collectObjectives(); // CHANGE 4: collect before add
+  collectImprovements(); // CHANGE 4: collect before add
   var imp = data || { area: '', relatedObjective: '', recommendation: '', responsibleParty: '', targetDate: '' };
   state.improvements.push(imp);
   renderImprovements();
@@ -2329,7 +2536,8 @@ function renderImprovements() {
 
 function collectImprovements() {
   var items = document.querySelectorAll('#improvementsContainer .dynamic-item');
-  if (items.length === 0 && state.improvements.length > 0) return; // container not in DOM
+  // CHANGE 4: Guard against missing DOM
+  if (items.length === 0 && state.improvements.length > 0) return;
   state.improvements = Array.from(items).map(function(el) {
     return {
       area: el.querySelector('.imp-area').value,
@@ -2448,24 +2656,45 @@ function saveEditAction() {
 }
 
 // ========================================
-// SETTINGS / BRAND
+// SETTINGS / BRAND — CHANGE 9: Tabbed settings
 // ========================================
+function switchSettingsTab(tab) {
+  document.querySelectorAll('.settings-tab').forEach(function(t) { t.classList.toggle('active', t.dataset.tab === tab); });
+  document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); p.style.display = 'none'; });
+  var panel = document.getElementById('settingsPanel-' + tab);
+  panel.classList.add('active');
+  panel.style.display = 'block';
+}
+
 function openSettings() {
+  // Branding tab
   document.getElementById('brandOrgName').value = brand.orgName;
   document.getElementById('brandPrimaryColor').value = brand.primaryColor;
   document.getElementById('brandSecondaryColor').value = brand.secondaryColor;
   document.getElementById('brandFOUO').checked = brand.fouo;
   document.getElementById('brandDefaultDept').value = brand.defaultDept || '';
-  document.getElementById('brandFramework').value = brand.framework || 'fema';
+  if (brand.logoBase64) {
+    document.getElementById('logoPreview').src = brand.logoBase64;
+    document.getElementById('logoPreview').style.display = 'block';
+  }
+  // Formatting tab
+  var fmt = brand.formatting || {};
+  document.getElementById('fmtFont').value = fmt.fontFamily || 'Calibri';
+  document.getElementById('fmtJustify').value = fmt.bodyJustification || 'left';
+  document.getElementById('fmtHeaderLeft').value = fmt.headerLeft || '{orgName}';
+  document.getElementById('fmtHeaderRight').value = fmt.headerRight || 'After-Action Report';
+  document.getElementById('fmtMargins').value = fmt.margins || 'normal';
+  document.getElementById('fmtFindings').value = fmt.findingsLabel || 'letters';
+  document.getElementById('fmtPageNumbers').checked = fmt.showPageNumbers !== false;
+  // Long Form tab
+  document.getElementById('lfFramework').value = brand.framework || 'fema';
   document.getElementById('secTimeline').checked = brand.sections ? brand.sections.timeline !== false : true;
   document.getElementById('secDecisions').checked = brand.sections ? brand.sections.decisions !== false : true;
   document.getElementById('secResourceGaps').checked = brand.sections ? brand.sections.resourceGaps !== false : true;
   document.getElementById('secCommIssues').checked = brand.sections ? brand.sections.commIssues !== false : true;
   document.getElementById('secAcronyms').checked = brand.sections ? brand.sections.acronyms !== false : true;
-  if (brand.logoBase64) {
-    document.getElementById('logoPreview').src = brand.logoBase64;
-    document.getElementById('logoPreview').style.display = 'block';
-  }
+  // Reset to first tab
+  switchSettingsTab('branding');
   document.getElementById('settingsModal').classList.add('active');
 }
 
@@ -2482,7 +2711,16 @@ function saveSettings() {
   brand.secondaryColor = document.getElementById('brandSecondaryColor').value;
   brand.fouo = document.getElementById('brandFOUO').checked;
   brand.defaultDept = document.getElementById('brandDefaultDept').value.trim();
-  brand.framework = document.getElementById('brandFramework').value;
+  brand.formatting = {
+    fontFamily: document.getElementById('fmtFont').value,
+    bodyJustification: document.getElementById('fmtJustify').value,
+    headerLeft: document.getElementById('fmtHeaderLeft').value,
+    headerRight: document.getElementById('fmtHeaderRight').value,
+    showPageNumbers: document.getElementById('fmtPageNumbers').checked,
+    findingsLabel: document.getElementById('fmtFindings').value,
+    margins: document.getElementById('fmtMargins').value,
+  };
+  brand.framework = document.getElementById('lfFramework').value;
   brand.sections = {
     timeline: document.getElementById('secTimeline').checked,
     decisions: document.getElementById('secDecisions').checked,
@@ -2492,7 +2730,7 @@ function saveSettings() {
   };
   localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
   applyBrandColors();
-  showToast('Brand settings saved', 'success');
+  showToast('Settings saved', 'success');
   closeSettings();
 }
 
@@ -2980,7 +3218,7 @@ function refreshPreview() {
 }
 
 // ========================================
-// DOCX GENERATION (LONG FORM)
+// DOCX GENERATION (LONG FORM) — CHANGE 10: Uses formatting options
 // ========================================
 async function generateLongDOCX() {
   collectCurrentStepData();
@@ -2994,6 +3232,15 @@ async function generateLongDOCX() {
       ShadingType, TableLayoutType, VerticalAlign, convertInchesToTwip
     } = docx;
 
+    // CHANGE 10: Formatting helpers
+    var fontName = (brand.formatting && brand.formatting.fontFamily) || 'Calibri';
+    var bodyAlign = { left: AlignmentType.LEFT, both: AlignmentType.JUSTIFIED, center: AlignmentType.CENTER }[(brand.formatting && brand.formatting.bodyJustification) || 'left'] || AlignmentType.LEFT;
+    var marginMap = { narrow: 720, normal: 1440, wide: 1800 };
+    var marginVal = marginMap[(brand.formatting && brand.formatting.margins) || 'normal'] || 1440;
+    var headerLeftText = ((brand.formatting && brand.formatting.headerLeft) || '{orgName}').replace('{orgName}', brand.orgName);
+    var headerRightText = (brand.formatting && brand.formatting.headerRight) || 'After-Action Report';
+    var showPageNumbers = brand.formatting ? brand.formatting.showPageNumbers !== false : true;
+
     var primaryHex = brand.primaryColor.replace('#', '');
     var secondaryHex = brand.secondaryColor.replace('#', '');
     var dateStr = state.eventDateStart ? formatDate(state.eventDateStart) + (state.eventDateEnd ? ' - ' + formatDate(state.eventDateEnd) : '') : 'N/A';
@@ -3004,7 +3251,7 @@ async function generateLongDOCX() {
     // Helper: create a table cell with consistent borders
     function tc(content, opts) {
       opts = opts || {};
-      var children = Array.isArray(content) ? content : [new Paragraph({ children: [new TextRun({ text: content || '', size: opts.fontSize || 20, font: 'Calibri', bold: opts.bold, color: opts.fontColor })] })];
+      var children = Array.isArray(content) ? content : [new Paragraph({ children: [new TextRun({ text: content || '', size: opts.fontSize || 20, font: fontName, bold: opts.bold, color: opts.fontColor })] })];
       return new TableCell({
         children: children,
         shading: opts.shading ? { type: ShadingType.SOLID, color: opts.shading } : undefined,
@@ -3041,19 +3288,19 @@ async function generateLongDOCX() {
     children.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 120 },
-      children: [new TextRun({ text: brand.orgName, size: 36, font: 'Calibri', color: primaryHex, bold: true })],
+      children: [new TextRun({ text: brand.orgName, size: 36, font: fontName, color: primaryHex, bold: true })],
     }));
 
     children.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 360, after: 120 },
-      children: [new TextRun({ text: state.eventTitle || 'After-Action Report', size: 52, font: 'Calibri', color: primaryHex, bold: true })],
+      children: [new TextRun({ text: state.eventTitle || 'After-Action Report', size: 52, font: fontName, color: primaryHex, bold: true })],
     }));
 
     children.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 120 },
-      children: [new TextRun({ text: 'After-Action Report', size: 36, font: 'Calibri', color: secondaryHex })],
+      children: [new TextRun({ text: 'After-Action Report', size: 36, font: fontName, color: secondaryHex })],
     }));
 
     children.push(new Paragraph({ spacing: { before: 240 } }));
@@ -3071,8 +3318,8 @@ async function generateLongDOCX() {
           alignment: AlignmentType.CENTER,
           spacing: { after: 50 },
           children: [
-            new TextRun({ text: pair[0] + ': ', size: 22, font: 'Calibri', color: '718096', bold: true }),
-            new TextRun({ text: pair[1], size: 22, font: 'Calibri', color: '2D3748' }),
+            new TextRun({ text: pair[0] + ': ', size: 22, font: fontName, color: '718096', bold: true }),
+            new TextRun({ text: pair[1], size: 22, font: fontName, color: '2D3748' }),
           ],
         }));
       }
@@ -3082,7 +3329,7 @@ async function generateLongDOCX() {
       children.push(new Paragraph({ spacing: { before: 400 } }));
       children.push(new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: 'FOR OFFICIAL USE ONLY', size: 28, font: 'Calibri', color: 'E53E3E', bold: true })],
+        children: [new TextRun({ text: 'FOR OFFICIAL USE ONLY', size: 28, font: fontName, color: 'E53E3E', bold: true })],
         border: { top: { color: 'E53E3E', space: 4, style: BorderStyle.SINGLE, size: 6 }, bottom: { color: 'E53E3E', space: 4, style: BorderStyle.SINGLE, size: 6 } },
       }));
     }
@@ -3090,7 +3337,7 @@ async function generateLongDOCX() {
     children.push(new Paragraph({ children: [new PageBreak()] }));
 
     // --- TABLE OF CONTENTS ---
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Table of Contents', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Table of Contents', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 200 } }));
 
     var tocEntries = [
       'Section 1: Executive Summary',
@@ -3106,27 +3353,27 @@ async function generateLongDOCX() {
     tocEntries.forEach(function(entry) {
       children.push(new Paragraph({
         spacing: { after: 60 },
-        children: [new TextRun({ text: entry, size: 22, font: 'Calibri', color: secondaryHex })],
+        children: [new TextRun({ text: entry, size: 22, font: fontName, color: secondaryHex })],
       }));
     });
 
     children.push(new Paragraph({ children: [new PageBreak()] }));
 
     // --- SECTION 1: EXECUTIVE SUMMARY ---
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 1: Executive Summary', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 1: Executive Summary', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
     if (state.purpose) {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Purpose', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
-      children.push(new Paragraph({ children: [new TextRun({ text: state.purpose, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Purpose', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.purpose, size: 22, font: fontName })], spacing: { after: 120 } }));
     }
     if (state.scope) {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Scope', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
-      children.push(new Paragraph({ children: [new TextRun({ text: state.scope, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Scope', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.scope, size: 22, font: fontName })], spacing: { after: 120 } }));
     }
 
     // --- SECTION 2: OVERVIEW ---
     children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 2: Exercise/Incident Overview', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 2: Exercise/Incident Overview', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
     var overviewData = [
       ['Event Title', state.eventTitle],
@@ -3151,26 +3398,26 @@ async function generateLongDOCX() {
 
     if (state.overallAssessment) {
       children.push(new Paragraph({ spacing: { before: 160 } }));
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Overall Assessment', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { after: 60 } }));
-      children.push(new Paragraph({ children: [new TextRun({ text: state.overallAssessment, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Overall Assessment', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { after: 60 } }));
+      children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.overallAssessment, size: 22, font: fontName })], spacing: { after: 120 } }));
     }
 
     // --- SECTION 3: OBJECTIVES ---
     children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 3: Objectives and Performance', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 3: Objectives and Performance', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
     state.objectives.forEach(function(obj, i) {
       children.push(new Paragraph({
         heading: HeadingLevel.HEADING_2,
-        children: [new TextRun({ text: 'Objective ' + (i + 1) + ': ' + (obj.description || 'Untitled'), bold: true, color: secondaryHex, font: 'Calibri', size: 26 })],
+        children: [new TextRun({ text: 'Objective ' + (i + 1) + ': ' + (obj.description || 'Untitled'), bold: true, color: secondaryHex, font: fontName, size: 26 })],
         spacing: { before: 160, after: 60 },
       }));
 
       if (obj.coreCapability) {
         children.push(new Paragraph({
           children: [
-            new TextRun({ text: capLabel + ': ', bold: true, size: 22, font: 'Calibri', color: '4A5568' }),
-            new TextRun({ text: obj.coreCapability, size: 22, font: 'Calibri' }),
+            new TextRun({ text: capLabel + ': ', bold: true, size: 22, font: fontName, color: '4A5568' }),
+            new TextRun({ text: obj.coreCapability, size: 22, font: fontName }),
           ],
           spacing: { after: 50 },
         }));
@@ -3179,8 +3426,8 @@ async function generateLongDOCX() {
       if (obj.rating) {
         children.push(new Paragraph({
           children: [
-            new TextRun({ text: 'Performance Rating: ', bold: true, size: 22, font: 'Calibri', color: '4A5568' }),
-            new TextRun({ text: ratingLabels[obj.rating] || obj.rating, size: 22, font: 'Calibri', bold: true, color: ratingColors[obj.rating] || '2D3748' }),
+            new TextRun({ text: 'Performance Rating: ', bold: true, size: 22, font: fontName, color: '4A5568' }),
+            new TextRun({ text: ratingLabels[obj.rating] || obj.rating, size: 22, font: fontName, bold: true, color: ratingColors[obj.rating] || '2D3748' }),
           ],
           spacing: { after: 50 },
         }));
@@ -3188,19 +3435,19 @@ async function generateLongDOCX() {
 
       if (obj.analysis) {
         children.push(new Paragraph({
-          children: [new TextRun({ text: 'Analysis:', bold: true, size: 22, font: 'Calibri', color: '4A5568' })],
+          children: [new TextRun({ text: 'Analysis:', bold: true, size: 22, font: fontName, color: '4A5568' })],
           spacing: { before: 100, after: 40 },
         }));
-        children.push(new Paragraph({ children: [new TextRun({ text: obj.analysis, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+        children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: obj.analysis, size: 22, font: fontName })], spacing: { after: 120 } }));
       }
     });
 
     if (state.objectives.length === 0) {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No objectives were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No objectives were documented.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
     // --- SECTION 4: STRENGTHS ---
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 4: Strengths', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { before: 240, after: 120 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 4: Strengths', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { before: 240, after: 120 } }));
 
     state.strengths.forEach(function(s) {
       var objRef = s.relatedObjective !== '' && state.objectives[parseInt(s.relatedObjective)]
@@ -3209,20 +3456,20 @@ async function generateLongDOCX() {
       children.push(new Paragraph({
         bullet: { level: 0 },
         children: [
-          new TextRun({ text: s.description, size: 22, font: 'Calibri' }),
-          new TextRun({ text: objRef, size: 20, font: 'Calibri', italics: true, color: '718096' }),
+          new TextRun({ text: s.description, size: 22, font: fontName }),
+          new TextRun({ text: objRef, size: 20, font: fontName, italics: true, color: '718096' }),
         ],
         spacing: { after: 50 },
       }));
     });
 
     if (state.strengths.length === 0) {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No strengths were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No strengths were documented.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
     // --- SECTION 5: AREAS FOR IMPROVEMENT ---
     children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 5: Areas for Improvement', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 5: Areas for Improvement', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
     if (state.improvements.length > 0) {
       var impHeader = new TableRow({
@@ -3244,32 +3491,32 @@ async function generateLongDOCX() {
       });
       children.push(new Table({ rows: [impHeader, ...impRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
     } else {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No areas for improvement were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No areas for improvement were documented.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
     // --- SECTION 6: ADDITIONAL CONTEXT ---
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 6: Additional Context', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { before: 240, after: 120 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 6: Additional Context', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { before: 240, after: 120 } }));
 
     if (brand.sections.timeline && state.scenarioNarrative && state.scenarioNarrative.trim()) {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Scenario Narrative', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
-      children.push(new Paragraph({ children: [new TextRun({ text: state.scenarioNarrative, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Scenario Narrative', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.scenarioNarrative, size: 22, font: fontName })], spacing: { after: 120 } }));
     }
     if (brand.sections.decisions && state.keyDecisions && state.keyDecisions.trim()) {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Key Decisions Made', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
-      children.push(new Paragraph({ children: [new TextRun({ text: state.keyDecisions, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Key Decisions Made', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.keyDecisions, size: 22, font: fontName })], spacing: { after: 120 } }));
     }
     if (brand.sections.resourceGaps && state.resourceGaps && state.resourceGaps.trim()) {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Resource Gaps Identified', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
-      children.push(new Paragraph({ children: [new TextRun({ text: state.resourceGaps, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Resource Gaps Identified', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.resourceGaps, size: 22, font: fontName })], spacing: { after: 120 } }));
     }
     if (brand.sections.commIssues && state.commIssues && state.commIssues.trim()) {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Communication Issues', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
-      children.push(new Paragraph({ children: [new TextRun({ text: state.commIssues, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Communication Issues', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.commIssues, size: 22, font: fontName })], spacing: { after: 120 } }));
     }
 
     // --- APPENDIX A: PARTICIPANTS ---
     children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix A: Participant List', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix A: Participant List', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
     if (state.participants.length > 0) {
       var pHeader = new TableRow({
@@ -3289,12 +3536,12 @@ async function generateLongDOCX() {
       });
       children.push(new Table({ rows: [pHeader, ...pRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
     } else {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No participants were recorded.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No participants were recorded.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
     // --- APPENDIX B: ACTION ITEMS ---
     children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix B: Improvement Plan Tracking', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix B: Improvement Plan Tracking', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
     if (state.actionItems.length > 0) {
       var aHeader = new TableRow({
@@ -3316,13 +3563,13 @@ async function generateLongDOCX() {
       });
       children.push(new Table({ rows: [aHeader, ...aRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
     } else {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No action items were recorded.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No action items were recorded.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
     // --- APPENDIX C: ACRONYMS ---
     if (brand.sections.acronyms) {
       children.push(new Paragraph({ children: [new PageBreak()] }));
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix C: Acronym List', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix C: Acronym List', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
       var acHeader = new TableRow({
         children: [thCell('Acronym', 25), thCell('Definition', 75)],
@@ -3336,27 +3583,36 @@ async function generateLongDOCX() {
       children.push(new Table({ rows: [acHeader, ...acRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
     }
 
+    // --- BUILD FOOTER ---
+    var footerChildren = [];
+    if (showPageNumbers) {
+      footerChildren.push(new TextRun({ text: dateStr + '   |   Page ', size: 16, font: fontName, color: '718096' }));
+      footerChildren.push(new TextRun({ children: [PageNumber.CURRENT], size: 16, font: fontName, color: '718096' }));
+    } else {
+      footerChildren.push(new TextRun({ text: dateStr, size: 16, font: fontName, color: '718096' }));
+    }
+
     // --- BUILD DOCUMENT ---
     var doc = new Document({
       styles: {
         default: {
-          document: { run: { font: 'Calibri', size: 22 } },
+          document: { run: { font: fontName, size: 22 } },
         },
       },
       sections: [{
         properties: {
           page: {
             size: { width: 12240, height: 15840 }, // Letter
-            margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 }, // 1 inch
+            margin: { top: marginVal, right: marginVal, bottom: marginVal, left: marginVal },
           },
         },
         headers: {
           default: new Header({
             children: [new Paragraph({
               children: [
-                new TextRun({ text: brand.orgName, size: 18, font: 'Calibri', color: primaryHex, bold: true }),
+                new TextRun({ text: headerLeftText, size: 18, font: fontName, color: primaryHex, bold: true }),
                 new TextRun({ text: '\t' }),
-                new TextRun({ text: 'After-Action Report', size: 18, font: 'Calibri', color: '718096' }),
+                new TextRun({ text: headerRightText, size: 18, font: fontName, color: '718096' }),
               ],
               tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
             })],
@@ -3366,10 +3622,7 @@ async function generateLongDOCX() {
           default: new Footer({
             children: [new Paragraph({
               alignment: AlignmentType.CENTER,
-              children: [
-                new TextRun({ text: dateStr + '   |   Page ', size: 16, font: 'Calibri', color: '718096' }),
-                new TextRun({ children: [PageNumber.CURRENT], size: 16, font: 'Calibri', color: '718096' }),
-              ],
+              children: footerChildren,
             })],
           }),
         },
@@ -3389,7 +3642,7 @@ async function generateLongDOCX() {
 }
 
 // ========================================
-// DOCX GENERATION (SHORT FORM)
+// DOCX GENERATION (SHORT FORM) — CHANGE 10: Uses formatting options
 // ========================================
 async function generateShortDOCX() {
   collectCurrentStepData();
@@ -3403,6 +3656,15 @@ async function generateShortDOCX() {
       ShadingType, VerticalAlign
     } = docx;
 
+    // CHANGE 10: Formatting helpers
+    var fontName = (brand.formatting && brand.formatting.fontFamily) || 'Calibri';
+    var bodyAlign = { left: AlignmentType.LEFT, both: AlignmentType.JUSTIFIED, center: AlignmentType.CENTER }[(brand.formatting && brand.formatting.bodyJustification) || 'left'] || AlignmentType.LEFT;
+    var marginMap = { narrow: 720, normal: 1440, wide: 1800 };
+    var marginVal = marginMap[(brand.formatting && brand.formatting.margins) || 'normal'] || 1440;
+    var headerLeftText = ((brand.formatting && brand.formatting.headerLeft) || '{orgName}').replace('{orgName}', brand.orgName);
+    var headerRightText = (brand.formatting && brand.formatting.headerRight) || 'After-Action Report';
+    var showPageNumbers = brand.formatting ? brand.formatting.showPageNumbers !== false : true;
+
     var primaryHex = brand.primaryColor.replace('#', '');
     var secondaryHex = brand.secondaryColor.replace('#', '');
     var dateStr = state.eventDateStart ? formatDate(state.eventDateStart) : 'N/A';
@@ -3410,7 +3672,7 @@ async function generateShortDOCX() {
 
     function tc(content, opts) {
       opts = opts || {};
-      var children = Array.isArray(content) ? content : [new Paragraph({ children: [new TextRun({ text: content || '', size: opts.fontSize || 18, font: 'Calibri', bold: opts.bold, color: opts.fontColor })] })];
+      var children = Array.isArray(content) ? content : [new Paragraph({ children: [new TextRun({ text: content || '', size: opts.fontSize || 18, font: fontName, bold: opts.bold, color: opts.fontColor })] })];
       return new TableCell({
         children: children,
         shading: opts.shading ? { type: ShadingType.SOLID, color: opts.shading } : undefined,
@@ -3441,8 +3703,8 @@ async function generateShortDOCX() {
         children.push(new Paragraph({
           spacing: { after: 30 },
           children: [
-            new TextRun({ text: pair[0] + ': ', size: 22, font: 'Calibri', bold: true, color: '4A5568' }),
-            new TextRun({ text: pair[1], size: 22, font: 'Calibri' }),
+            new TextRun({ text: pair[0] + ': ', size: 22, font: fontName, bold: true, color: '4A5568' }),
+            new TextRun({ text: pair[1], size: 22, font: fontName }),
           ],
         }));
       }
@@ -3451,33 +3713,35 @@ async function generateShortDOCX() {
     children.push(new Paragraph({ spacing: { before: 160 } }));
     children.push(new Paragraph({
       heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: 'After-Action Report', bold: true, color: primaryHex, font: 'Calibri', size: 28 })],
+      children: [new TextRun({ text: 'After-Action Report', bold: true, color: primaryHex, font: fontName, size: 28 })],
       spacing: { after: 80 },
     }));
 
     // --- OVERVIEW ---
     children.push(new Paragraph({
       heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: 'OVERVIEW', bold: true, color: primaryHex, font: 'Calibri', size: 28 })],
+      children: [new TextRun({ text: 'OVERVIEW', bold: true, color: primaryHex, font: fontName, size: 28 })],
       spacing: { before: 120, after: 80 },
     }));
 
     if (state.goal) {
       children.push(new Paragraph({
+        alignment: bodyAlign,
         spacing: { after: 60 },
         children: [
-          new TextRun({ text: 'Goal: ', size: 22, font: 'Calibri', bold: true }),
-          new TextRun({ text: state.goal, size: 22, font: 'Calibri' }),
+          new TextRun({ text: 'Goal: ', size: 22, font: fontName, bold: true }),
+          new TextRun({ text: state.goal, size: 22, font: fontName }),
         ],
       }));
     }
 
     if (state.purpose) {
       children.push(new Paragraph({
+        alignment: bodyAlign,
         spacing: { after: 60 },
         children: [
-          new TextRun({ text: 'Purpose: ', size: 22, font: 'Calibri', bold: true }),
-          new TextRun({ text: state.purpose, size: 22, font: 'Calibri' }),
+          new TextRun({ text: 'Purpose: ', size: 22, font: fontName, bold: true }),
+          new TextRun({ text: state.purpose, size: 22, font: fontName }),
         ],
       }));
     }
@@ -3486,8 +3750,8 @@ async function generateShortDOCX() {
       children.push(new Paragraph({
         spacing: { after: 60 },
         children: [
-          new TextRun({ text: 'Drill Duration: ', size: 22, font: 'Calibri', bold: true }),
-          new TextRun({ text: state.drillDuration, size: 22, font: 'Calibri' }),
+          new TextRun({ text: 'Drill Duration: ', size: 22, font: fontName, bold: true }),
+          new TextRun({ text: state.drillDuration, size: 22, font: fontName }),
         ],
       }));
     }
@@ -3495,13 +3759,13 @@ async function generateShortDOCX() {
     if (state.shortObjectives.length > 0) {
       children.push(new Paragraph({
         spacing: { after: 40 },
-        children: [new TextRun({ text: 'Objectives:', size: 22, font: 'Calibri', bold: true })],
+        children: [new TextRun({ text: 'Objectives:', size: 22, font: fontName, bold: true })],
       }));
       state.shortObjectives.forEach(function(o) {
         if (o) {
           children.push(new Paragraph({
             bullet: { level: 0 },
-            children: [new TextRun({ text: o, size: 22, font: 'Calibri' })],
+            children: [new TextRun({ text: o, size: 22, font: fontName })],
             spacing: { after: 30 },
           }));
         }
@@ -3511,38 +3775,39 @@ async function generateShortDOCX() {
     // --- FINDINGS ---
     children.push(new Paragraph({
       heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: 'FINDINGS, RECOMMENDATIONS AND RATIONALES', bold: true, color: primaryHex, font: 'Calibri', size: 28 })],
+      children: [new TextRun({ text: 'FINDINGS, RECOMMENDATIONS AND RATIONALES', bold: true, color: primaryHex, font: fontName, size: 28 })],
       spacing: { before: 160, after: 80 },
     }));
 
     state.findings.forEach(function(f) {
       children.push(new Paragraph({
         heading: HeadingLevel.HEADING_2,
-        children: [new TextRun({ text: 'Finding ' + (f.letter || '') + ': ' + (f.title || ''), bold: true, color: secondaryHex, font: 'Calibri', size: 24 })],
+        children: [new TextRun({ text: 'Finding ' + (f.letter || '') + ': ' + (f.title || ''), bold: true, color: secondaryHex, font: fontName, size: 24 })],
         spacing: { before: 100, after: 60 },
       }));
       if (f.description) {
-        children.push(new Paragraph({ children: [new TextRun({ text: f.description, size: 22, font: 'Calibri' })], spacing: { after: 40 } }));
+        children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: f.description, size: 22, font: fontName })], spacing: { after: 40 } }));
       }
       if (f.recommendation) {
         children.push(new Paragraph({
+          alignment: bodyAlign,
           spacing: { after: 60 },
           children: [
-            new TextRun({ text: 'Recommendation: ', size: 22, font: 'Calibri', bold: true }),
-            new TextRun({ text: f.recommendation, size: 22, font: 'Calibri' }),
+            new TextRun({ text: 'Recommendation: ', size: 22, font: fontName, bold: true }),
+            new TextRun({ text: f.recommendation, size: 22, font: fontName }),
           ],
         }));
       }
     });
 
     if (state.findings.length === 0) {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No findings documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 80 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No findings documented.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 80 } }));
     }
 
     // --- TIMELINE ---
     children.push(new Paragraph({
       heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: 'TIMELINE', bold: true, color: primaryHex, font: 'Calibri', size: 28 })],
+      children: [new TextRun({ text: 'TIMELINE', bold: true, color: primaryHex, font: fontName, size: 28 })],
       spacing: { before: 160, after: 80 },
     }));
 
@@ -3563,13 +3828,13 @@ async function generateShortDOCX() {
       });
       children.push(new Table({ rows: [tlHeader, ...tlRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
     } else {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No timeline entries.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 80 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No timeline entries.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 80 } }));
     }
 
     // --- CORRECTIVE ACTIONS ---
     children.push(new Paragraph({
       heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: 'CORRECTIVE ACTIONS & TASK TRACKING', bold: true, color: primaryHex, font: 'Calibri', size: 28 })],
+      children: [new TextRun({ text: 'CORRECTIVE ACTIONS & TASK TRACKING', bold: true, color: primaryHex, font: fontName, size: 28 })],
       spacing: { before: 160, after: 80 },
     }));
 
@@ -3591,40 +3856,49 @@ async function generateShortDOCX() {
       });
       children.push(new Table({ rows: [caHeader, ...caRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
     } else {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No corrective actions.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 80 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No corrective actions.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 80 } }));
     }
 
     // --- JC REFERENCE ---
     children.push(new Paragraph({ spacing: { before: 200 } }));
     children.push(new Paragraph({
-      children: [new TextRun({ text: 'JC Critical Areas:', size: 20, font: 'Calibri', bold: true, color: '4A5568' })],
+      children: [new TextRun({ text: 'JC Critical Areas:', size: 20, font: fontName, bold: true, color: '4A5568' })],
       spacing: { after: 40 },
     }));
     var jcRef = ['1. Communications', '2. Staffing', '3. Patient Clinical and Support Services', '4. Safety and Security', '5. Resources and Assets', '6. Utilities'];
     jcRef.forEach(function(item) {
       children.push(new Paragraph({
-        children: [new TextRun({ text: item, size: 18, font: 'Calibri', color: '718096' })],
+        children: [new TextRun({ text: item, size: 18, font: fontName, color: '718096' })],
         spacing: { after: 15 },
       }));
     });
 
+    // --- BUILD FOOTER ---
+    var footerChildren = [];
+    if (showPageNumbers) {
+      footerChildren.push(new TextRun({ text: dateStr + '   |   Page ', size: 16, font: fontName, color: '718096' }));
+      footerChildren.push(new TextRun({ children: [PageNumber.CURRENT], size: 16, font: fontName, color: '718096' }));
+    } else {
+      footerChildren.push(new TextRun({ text: dateStr, size: 16, font: fontName, color: '718096' }));
+    }
+
     // --- BUILD DOCUMENT ---
     var doc = new Document({
-      styles: { default: { document: { run: { font: 'Calibri', size: 22 } } } },
+      styles: { default: { document: { run: { font: fontName, size: 22 } } } },
       sections: [{
         properties: {
           page: {
             size: { width: 12240, height: 15840 },
-            margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+            margin: { top: marginVal, right: marginVal, bottom: marginVal, left: marginVal },
           },
         },
         headers: {
           default: new Header({
             children: [new Paragraph({
               children: [
-                new TextRun({ text: brand.orgName, size: 18, font: 'Calibri', color: primaryHex, bold: true }),
+                new TextRun({ text: headerLeftText, size: 18, font: fontName, color: primaryHex, bold: true }),
                 new TextRun({ text: '\t' }),
-                new TextRun({ text: 'After-Action Report', size: 18, font: 'Calibri', color: '718096' }),
+                new TextRun({ text: headerRightText, size: 18, font: fontName, color: '718096' }),
               ],
               tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
             })],
@@ -3634,10 +3908,7 @@ async function generateShortDOCX() {
           default: new Footer({
             children: [new Paragraph({
               alignment: AlignmentType.CENTER,
-              children: [
-                new TextRun({ text: dateStr + '   |   Page ', size: 16, font: 'Calibri', color: '718096' }),
-                new TextRun({ children: [PageNumber.CURRENT], size: 16, font: 'Calibri', color: '718096' }),
-              ],
+              children: footerChildren,
             })],
           }),
         },
@@ -3842,9 +4113,17 @@ function showToast(msg, type) {
 }
 
 // ========================================
-// INITIALIZATION
+// INITIALIZATION — CHANGE 1: Auth gate + initApp
 // ========================================
 window.addEventListener('DOMContentLoaded', function() {
+  if (sessionStorage.getItem('aar-auth') === 'true') {
+    document.getElementById('authGate').style.display = 'none';
+    initApp();
+  }
+  // else: auth gate is visible, user must log in
+});
+
+function initApp() {
   migrateDraftsV1toV2();
   try {
     var savedBrand = localStorage.getItem(BRAND_KEY);
@@ -3853,8 +4132,10 @@ window.addEventListener('DOMContentLoaded', function() {
   applyBrandColors();
   populateFacilityOptions('eventFacility');
   populateFacilityOptions('sEventFacility');
-  showDashboard();
-});
+  // CHANGE 11: Set initial history state
+  history.replaceState({ dashboard: true }, '');
+  showDashboardNoHistory();
+}
 
 // Close modals on overlay click
 document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
