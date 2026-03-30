@@ -1,0 +1,2257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AAR Builder — After-Action Report</title>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --primary: #003B71;
+  --secondary: #0072CE;
+  --accent: #E8792B;
+  --bg: #F5F7FA;
+  --text: #2D3748;
+  --white: #FFFFFF;
+  --gray-100: #F7FAFC;
+  --gray-200: #EDF2F7;
+  --gray-300: #E2E8F0;
+  --gray-400: #CBD5E0;
+  --gray-500: #A0AEC0;
+  --gray-600: #718096;
+  --gray-700: #4A5568;
+  --green: #38A169;
+  --yellow: #D69E2E;
+  --orange: #DD6B20;
+  --red: #E53E3E;
+  --sidebar-w: 260px;
+  --header-h: 60px;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+/* Header */
+.app-header { position: fixed; top: 0; left: 0; right: 0; height: var(--header-h); background: var(--primary); color: var(--white); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+.app-header h1 { font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
+.app-header h1 span { color: var(--accent); }
+.header-actions { display: flex; align-items: center; gap: 12px; }
+.header-actions select { padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: var(--white); font-size: 13px; cursor: pointer; max-width: 180px; }
+.header-actions select option { color: var(--text); background: var(--white); }
+.btn-header { padding: 6px 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: var(--white); font-size: 13px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+.btn-header:hover { background: rgba(255,255,255,0.15); }
+.btn-header.accent { background: var(--accent); border-color: var(--accent); }
+.btn-header.accent:hover { background: #d06a20; }
+.gear-btn { font-size: 18px; cursor: pointer; background: none; border: none; color: var(--white); padding: 6px; border-radius: 6px; transition: all 0.2s; }
+.gear-btn:hover { background: rgba(255,255,255,0.15); }
+.autosave-indicator { font-size: 11px; color: rgba(255,255,255,0.6); white-space: nowrap; }
+/* Layout */
+.app-layout { display: flex; margin-top: var(--header-h); min-height: calc(100vh - var(--header-h)); }
+/* Sidebar */
+.sidebar { width: var(--sidebar-w); background: var(--white); border-right: 1px solid var(--gray-300); position: fixed; top: var(--header-h); bottom: 0; left: 0; padding: 24px 0; overflow-y: auto; z-index: 50; }
+.sidebar-nav { list-style: none; }
+.sidebar-nav li { padding: 12px 24px; cursor: pointer; display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--gray-600); transition: all 0.2s; border-left: 3px solid transparent; }
+.sidebar-nav li:hover { background: var(--gray-100); color: var(--text); }
+.sidebar-nav li.active { background: #EBF4FF; color: var(--primary); border-left-color: var(--primary); font-weight: 600; }
+.sidebar-nav li.completed .step-num { background: var(--green); color: var(--white); }
+.step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--gray-300); color: var(--gray-600); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; transition: all 0.2s; }
+.sidebar-nav li.active .step-num { background: var(--primary); color: var(--white); }
+/* Main content */
+.main-content { margin-left: var(--sidebar-w); flex: 1; padding: 32px 40px; max-width: 1200px; }
+.step-panel { display: none; animation: fadeIn 0.3s ease; }
+.step-panel.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.step-title { font-size: 26px; font-weight: 700; color: var(--primary); margin-bottom: 8px; }
+.step-subtitle { font-size: 14px; color: var(--gray-600); margin-bottom: 28px; }
+/* Form elements */
+.form-group { margin-bottom: 20px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.form-row.three { grid-template-columns: 1fr 1fr 1fr; }
+label { display: block; font-size: 13px; font-weight: 600; color: var(--gray-700); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+input[type="text"], input[type="email"], input[type="date"], input[type="number"], select, textarea {
+  width: 100%; padding: 10px 14px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px; font-family: inherit; color: var(--text); background: var(--white); transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--secondary); box-shadow: 0 0 0 3px rgba(0,114,206,0.12); }
+textarea { resize: vertical; min-height: 80px; }
+.form-card { background: var(--white); border-radius: 12px; padding: 24px; margin-bottom: 20px; border: 1px solid var(--gray-200); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.form-card h3 { font-size: 16px; color: var(--primary); margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid var(--gray-200); }
+/* Buttons */
+.btn { padding: 10px 20px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+.btn-primary { background: var(--primary); color: var(--white); }
+.btn-primary:hover { background: #00294F; }
+.btn-secondary { background: var(--secondary); color: var(--white); }
+.btn-secondary:hover { background: #005BA3; }
+.btn-accent { background: var(--accent); color: var(--white); }
+.btn-accent:hover { background: #d06a20; }
+.btn-outline { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
+.btn-outline:hover { background: var(--primary); color: var(--white); }
+.btn-danger { background: var(--red); color: var(--white); }
+.btn-danger:hover { background: #C53030; }
+.btn-sm { padding: 6px 14px; font-size: 13px; }
+.btn-lg { padding: 14px 28px; font-size: 16px; }
+.btn-group { display: flex; gap: 12px; margin-top: 24px; }
+/* Navigation buttons */
+.step-nav { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 24px; border-top: 2px solid var(--gray-200); }
+/* Tables */
+.data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.data-table th { background: var(--primary); color: var(--white); padding: 12px 14px; text-align: left; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+.data-table th:first-child { border-radius: 8px 0 0 0; }
+.data-table th:last-child { border-radius: 0 8px 0 0; }
+.data-table td { padding: 10px 14px; border-bottom: 1px solid var(--gray-200); }
+.data-table tr:nth-child(even) { background: var(--gray-100); }
+.data-table tr:hover { background: #EBF4FF; }
+.table-actions { display: flex; gap: 8px; }
+.table-actions button { padding: 4px 10px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+.table-actions .edit-btn { background: #EBF4FF; color: var(--secondary); }
+.table-actions .delete-btn { background: #FED7D7; color: var(--red); }
+.table-actions .edit-btn:hover { background: var(--secondary); color: var(--white); }
+.table-actions .delete-btn:hover { background: var(--red); color: var(--white); }
+/* Upload zone */
+.upload-zone { border: 2px dashed var(--gray-400); border-radius: 12px; padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--white); }
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--secondary); background: #EBF4FF; }
+.upload-zone-icon { font-size: 48px; color: var(--gray-400); margin-bottom: 12px; }
+.upload-zone-text { font-size: 16px; color: var(--gray-600); }
+.upload-zone-sub { font-size: 13px; color: var(--gray-500); margin-top: 8px; }
+.file-list { margin-top: 20px; }
+.file-item { display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: var(--white); border: 1px solid var(--gray-200); border-radius: 8px; margin-bottom: 10px; transition: all 0.2s; }
+.file-item:hover { border-color: var(--secondary); }
+.file-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--white); flex-shrink: 0; }
+.file-icon.docx { background: #2B579A; }
+.file-icon.xlsx { background: #217346; }
+.file-icon.pptx { background: #D24726; }
+.file-info { flex: 1; }
+.file-name { font-weight: 600; font-size: 14px; }
+.file-meta { font-size: 12px; color: var(--gray-500); }
+.file-actions { display: flex; gap: 8px; align-items: center; }
+.toggle-switch { position: relative; width: 44px; height: 24px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--gray-300); border-radius: 24px; transition: 0.3s; }
+.toggle-slider::before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: var(--white); border-radius: 50%; transition: 0.3s; }
+.toggle-switch input:checked + .toggle-slider { background: var(--green); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+.file-preview { margin-top: 10px; padding: 12px 18px; background: var(--gray-100); border-radius: 8px; font-size: 13px; color: var(--gray-700); max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; display: none; border-left: 3px solid var(--secondary); }
+.file-preview.open { display: block; }
+.preview-toggle { background: none; border: none; color: var(--secondary); cursor: pointer; font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 4px; }
+.preview-toggle:hover { background: #EBF4FF; }
+/* Step 4 two-column layout */
+.step4-layout { display: grid; grid-template-columns: 1fr; gap: 24px; }
+@media (min-width: 1200px) {
+  .step4-layout { grid-template-columns: 7fr 3fr; }
+}
+.reference-panel { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; padding: 20px; max-height: calc(100vh - 160px); overflow-y: auto; position: sticky; top: calc(var(--header-h) + 20px); }
+.reference-panel h3 { font-size: 15px; color: var(--primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.ref-doc { margin-bottom: 16px; }
+.ref-doc-title { font-size: 13px; font-weight: 600; color: var(--gray-700); cursor: pointer; padding: 8px 12px; background: var(--gray-100); border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+.ref-doc-title:hover { background: var(--gray-200); }
+.ref-doc-content { font-size: 12px; color: var(--gray-600); padding: 10px 12px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; display: none; border-left: 2px solid var(--secondary); margin-top: 6px; }
+.ref-doc-content.open { display: block; }
+/* Dynamic items */
+.dynamic-item { background: var(--white); border: 1px solid var(--gray-200); border-radius: 10px; padding: 20px; margin-bottom: 16px; position: relative; }
+.dynamic-item .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.dynamic-item .item-header h4 { font-size: 15px; color: var(--primary); }
+.remove-item { background: none; border: none; color: var(--red); cursor: pointer; font-size: 18px; padding: 4px 8px; border-radius: 4px; }
+.remove-item:hover { background: #FED7D7; }
+.rating-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.rating-option { display: flex; align-items: center; gap: 6px; }
+.rating-option input[type="radio"] { display: none; }
+.rating-badge { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 2px solid var(--gray-300); transition: all 0.2s; }
+.rating-option input:checked + .rating-badge.rate-p { background: #C6F6D5; border-color: var(--green); color: #22543D; }
+.rating-option input:checked + .rating-badge.rate-s { background: #FEFCBF; border-color: var(--yellow); color: #744210; }
+.rating-option input:checked + .rating-badge.rate-m { background: #FEEBC8; border-color: var(--orange); color: #7B341E; }
+.rating-option input:checked + .rating-badge.rate-u { background: #FED7D7; border-color: var(--red); color: #742A2A; }
+.rating-badge:hover { border-color: var(--gray-500); }
+/* Stats bar */
+.stats-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.stat-card { background: var(--white); border: 1px solid var(--gray-200); border-radius: 10px; padding: 16px 20px; flex: 1; min-width: 140px; }
+.stat-value { font-size: 28px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 12px; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+/* Generate step */
+.generate-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 32px; }
+.generate-card { background: var(--white); border: 2px solid var(--gray-200); border-radius: 12px; padding: 28px; text-align: center; transition: all 0.2s; cursor: pointer; }
+.generate-card:hover { border-color: var(--secondary); box-shadow: 0 4px 12px rgba(0,114,206,0.12); transform: translateY(-2px); }
+.generate-card-icon { font-size: 48px; margin-bottom: 12px; }
+.generate-card h3 { font-size: 18px; color: var(--primary); margin-bottom: 8px; }
+.generate-card p { font-size: 13px; color: var(--gray-600); }
+.generate-card .btn { margin-top: 16px; }
+/* Preview */
+.preview-container { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; padding: 32px; max-height: 600px; overflow-y: auto; }
+.preview-container h1 { font-size: 24px; color: var(--primary); border-bottom: 3px solid var(--primary); padding-bottom: 10px; margin-bottom: 20px; }
+.preview-container h2 { font-size: 18px; color: var(--primary); margin: 24px 0 12px; }
+.preview-container h3 { font-size: 15px; color: var(--secondary); margin: 16px 0 8px; }
+.preview-container table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+.preview-container table th { background: var(--primary); color: var(--white); padding: 8px 12px; text-align: left; }
+.preview-container table td { padding: 8px 12px; border: 1px solid var(--gray-300); }
+.preview-container table tr:nth-child(even) { background: var(--gray-100); }
+.preview-badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+.preview-badge.p-badge { background: #C6F6D5; color: #22543D; }
+.preview-badge.s-badge { background: #FEFCBF; color: #744210; }
+.preview-badge.m-badge { background: #FEEBC8; color: #7B341E; }
+.preview-badge.u-badge { background: #FED7D7; color: #742A2A; }
+/* Modal */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: var(--white); border-radius: 16px; padding: 32px; width: 90%; max-width: 560px; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+.modal h2 { font-size: 20px; color: var(--primary); margin-bottom: 20px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--gray-200); }
+/* Toast */
+.toast { position: fixed; bottom: 24px; right: 24px; background: var(--primary); color: var(--white); padding: 12px 24px; border-radius: 10px; font-size: 14px; z-index: 300; transform: translateY(100px); opacity: 0; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { background: var(--green); }
+.toast.error { background: var(--red); }
+/* Loading spinner */
+.spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: var(--white); border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* Responsive */
+@media (max-width: 1100px) {
+  .main-content { padding: 24px 20px; }
+  .form-row { grid-template-columns: 1fr; }
+  .form-row.three { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .main-content { margin-left: 0; }
+}
+/* Edit participant modal */
+.participant-edit-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+/* Import section styling */
+.import-section { margin-top: 16px; padding: 16px; background: var(--gray-100); border-radius: 8px; }
+.import-section h4 { font-size: 14px; color: var(--gray-700); margin-bottom: 10px; }
+/* Status indicators */
+.status-not-started { color: var(--gray-600); }
+.status-in-progress { color: var(--secondary); }
+.status-complete { color: var(--green); }
+.priority-high { color: var(--red); font-weight: 600; }
+.priority-medium { color: var(--orange); font-weight: 600; }
+.priority-low { color: var(--green); font-weight: 600; }
+/* Color picker */
+input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-300); border-radius: 6px; cursor: pointer; padding: 2px; }
+/* Logo preview */
+.logo-preview { max-width: 200px; max-height: 80px; margin-top: 8px; border-radius: 6px; border: 1px solid var(--gray-300); }
+/* JSON import/export buttons in header */
+.json-btns { display: flex; gap: 4px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="app-header">
+  <h1>&#9670; AAR <span>Builder</span></h1>
+  <div class="header-actions">
+    <div class="autosave-indicator" id="autosaveIndicator">Auto-saved</div>
+    <select id="draftSelector" title="Load a saved draft">
+      <option value="">-- Saved Drafts --</option>
+    </select>
+    <button class="btn-header accent" onclick="saveDraft()">&#128190; Save Draft</button>
+    <button class="btn-header" onclick="exportJSON()">&#8599; Export JSON</button>
+    <button class="btn-header" onclick="document.getElementById('jsonImportInput').click()">&#8601; Import JSON</button>
+    <input type="file" id="jsonImportInput" accept=".json" style="display:none" onchange="importJSON(event)">
+    <button class="gear-btn" onclick="openSettings()" title="Brand Settings">&#9881;</button>
+  </div>
+</header>
+
+<!-- Layout -->
+<div class="app-layout">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <ul class="sidebar-nav" id="sidebarNav">
+      <li class="active" data-step="1"><span class="step-num">1</span> Event Details</li>
+      <li data-step="2"><span class="step-num">2</span> Participants</li>
+      <li data-step="3"><span class="step-num">3</span> Reference Docs</li>
+      <li data-step="4"><span class="step-num">4</span> AAR Content</li>
+      <li data-step="5"><span class="step-num">5</span> Action Items</li>
+      <li data-step="6"><span class="step-num">6</span> Generate Output</li>
+    </ul>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- Step 1: Event Details -->
+    <section class="step-panel active" id="step1">
+      <h2 class="step-title">Event Details</h2>
+      <p class="step-subtitle">Provide the basic information about the exercise or incident.</p>
+
+      <div class="form-card">
+        <h3>Event Information</h3>
+        <div class="form-group">
+          <label for="eventTitle">Event / Training Title *</label>
+          <input type="text" id="eventTitle" placeholder="e.g., 2026 Hospital Evacuation Tabletop Exercise">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="eventType">Event Type *</label>
+            <select id="eventType">
+              <option value="">Select type...</option>
+              <option value="Exercise - Tabletop">Exercise - Tabletop</option>
+              <option value="Exercise - Functional">Exercise - Functional</option>
+              <option value="Exercise - Full-Scale">Exercise - Full-Scale</option>
+              <option value="Exercise - Drill">Exercise - Drill</option>
+              <option value="Real-World Incident">Real-World Incident</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="eventLocation">Location(s)</label>
+            <input type="text" id="eventLocation" placeholder="e.g., UCHealth Memorial Central, Colorado Springs">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="eventDateStart">Start Date *</label>
+            <input type="date" id="eventDateStart">
+          </div>
+          <div class="form-group">
+            <label for="eventDateEnd">End Date (if multi-day)</label>
+            <input type="date" id="eventDateEnd">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <h3>Sponsoring Organization</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="sponsorOrg">Organization / Department *</label>
+            <input type="text" id="sponsorOrg" placeholder="e.g., UCHealth Emergency Management">
+          </div>
+          <div class="form-group">
+            <label for="directorName">Exercise / Incident Director Name</label>
+            <input type="text" id="directorName" placeholder="Full name">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="directorTitle">Director Title</label>
+          <input type="text" id="directorTitle" placeholder="e.g., Emergency Management Coordinator">
+        </div>
+      </div>
+
+      <div class="form-card">
+        <h3>Overall Assessment</h3>
+        <div class="form-group">
+          <label for="overallAssessment">Brief Qualitative Summary</label>
+          <textarea id="overallAssessment" rows="4" placeholder="Provide a brief overall assessment of the exercise or incident response..."></textarea>
+        </div>
+      </div>
+
+      <div class="step-nav">
+        <div></div>
+        <button class="btn btn-primary" onclick="goToStep(2)">Next: Participants &#8594;</button>
+      </div>
+    </section>
+
+    <!-- Step 2: Participants -->
+    <section class="step-panel" id="step2">
+      <h2 class="step-title">Participants</h2>
+      <p class="step-subtitle">Add participants who were involved in the exercise or incident.</p>
+
+      <div class="stats-bar">
+        <div class="stat-card">
+          <div class="stat-value" id="participantCount">0</div>
+          <div class="stat-label">Total Participants</div>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <h3>Add Participant</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="pName">Name *</label>
+            <input type="text" id="pName" placeholder="Full name">
+          </div>
+          <div class="form-group">
+            <label for="pTitle">Title / Role</label>
+            <input type="text" id="pTitle" placeholder="e.g., Charge Nurse">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="pDept">Department</label>
+            <input type="text" id="pDept" placeholder="e.g., Emergency Department">
+          </div>
+          <div class="form-group">
+            <label for="pEmail">Email (optional)</label>
+            <input type="email" id="pEmail" placeholder="email@example.com">
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="addParticipant()">+ Add Participant</button>
+      </div>
+
+      <div class="form-card">
+        <h3>Participant List</h3>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="participantTable">
+            <thead>
+              <tr><th>#</th><th>Name</th><th>Title/Role</th><th>Department</th><th>Email</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="participantTableBody"></tbody>
+          </table>
+        </div>
+        <p id="noParticipantsMsg" style="text-align:center; color:var(--gray-500); padding:20px; font-size:14px;">No participants added yet.</p>
+      </div>
+
+      <div class="import-section">
+        <h4>Import Participants</h4>
+        <div class="btn-group" style="margin-top:8px;">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('csvImportInput').click()">Import from CSV</button>
+          <input type="file" id="csvImportInput" accept=".csv" style="display:none" onchange="importParticipantsCSV(event)">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('xlsxImportInput').click()">Import from XLSX</button>
+          <input type="file" id="xlsxImportInput" accept=".xlsx" style="display:none" onchange="importParticipantsXLSX(event)">
+        </div>
+        <p style="font-size:12px; color:var(--gray-500); margin-top:8px;">CSV/XLSX should have columns: Name, Title, Department, Email</p>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-outline" onclick="goToStep(1)">&#8592; Event Details</button>
+        <button class="btn btn-primary" onclick="goToStep(3)">Next: Reference Docs &#8594;</button>
+      </div>
+    </section>
+
+    <!-- Step 3: Upload Reference Documents -->
+    <section class="step-panel" id="step3">
+      <h2 class="step-title">Upload Reference Documents</h2>
+      <p class="step-subtitle">Upload exercise plans, incident reports, or other reference materials. Text will be extracted for use in AAR content creation.</p>
+
+      <div class="upload-zone" id="uploadZone">
+        <div class="upload-zone-icon">&#128196;</div>
+        <div class="upload-zone-text">Drag &amp; drop files here or click to browse</div>
+        <div class="upload-zone-sub">Supports DOCX, PPTX, XLSX files</div>
+        <input type="file" id="fileInput" multiple accept=".docx,.pptx,.xlsx" style="display:none">
+      </div>
+
+      <div class="file-list" id="fileList"></div>
+
+      <div class="step-nav">
+        <button class="btn btn-outline" onclick="goToStep(2)">&#8592; Participants</button>
+        <button class="btn btn-primary" onclick="goToStep(4)">Next: AAR Content &#8594;</button>
+      </div>
+    </section>
+
+    <!-- Step 4: AAR Content -->
+    <section class="step-panel" id="step4">
+      <h2 class="step-title">AAR Content</h2>
+      <p class="step-subtitle">The core of your After-Action Report. Use the reference panel to inform your observations.</p>
+
+      <div class="step4-layout">
+        <div class="step4-content">
+          <!-- Executive Summary -->
+          <div class="form-card">
+            <h3>Executive Summary</h3>
+            <div class="form-group">
+              <label for="purpose">Purpose</label>
+              <textarea id="purpose" rows="4" placeholder="Describe why this exercise or incident occurred and the overarching goals..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="scope">Scope</label>
+              <textarea id="scope" rows="4" placeholder="Describe what capabilities, functions, or plans were tested or activated..."></textarea>
+            </div>
+          </div>
+
+          <!-- Objectives -->
+          <div class="form-card">
+            <h3>Objectives Tested</h3>
+            <div id="objectivesContainer"></div>
+            <button class="btn btn-secondary btn-sm" onclick="addObjective()" style="margin-top:12px;">+ Add Objective</button>
+          </div>
+
+          <!-- Strengths -->
+          <div class="form-card">
+            <h3>Strengths</h3>
+            <div id="strengthsContainer"></div>
+            <button class="btn btn-secondary btn-sm" onclick="addStrength()" style="margin-top:12px;">+ Add Strength</button>
+          </div>
+
+          <!-- Areas for Improvement -->
+          <div class="form-card">
+            <h3>Areas for Improvement</h3>
+            <div id="improvementsContainer"></div>
+            <button class="btn btn-secondary btn-sm" onclick="addImprovement()" style="margin-top:12px;">+ Add Area for Improvement</button>
+          </div>
+
+          <!-- Additional Context -->
+          <div class="form-card">
+            <h3>Additional Context</h3>
+            <div class="form-group">
+              <label for="scenarioNarrative">Scenario Narrative</label>
+              <textarea id="scenarioNarrative" rows="4" placeholder="Describe the scenario that framed the exercise or the incident timeline..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="keyDecisions">Key Decisions Made</label>
+              <textarea id="keyDecisions" rows="4" placeholder="Document significant decisions made during the exercise or incident..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="resourceGaps">Resource Gaps Identified</label>
+              <textarea id="resourceGaps" rows="3" placeholder="List any resource shortfalls or gaps discovered..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="commIssues">Communication Issues</label>
+              <textarea id="commIssues" rows="3" placeholder="Document any communication challenges or failures..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reference Panel -->
+        <div class="reference-panel" id="referencePanel">
+          <h3>&#128196; Reference Documents</h3>
+          <div id="referencePanelContent">
+            <p style="font-size:13px; color:var(--gray-500);">Upload documents in Step 3 and mark them as "Use as reference" to see their content here.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-outline" onclick="goToStep(3)">&#8592; Reference Docs</button>
+        <button class="btn btn-primary" onclick="goToStep(5)">Next: Action Items &#8594;</button>
+      </div>
+    </section>
+
+    <!-- Step 5: Action Items -->
+    <section class="step-panel" id="step5">
+      <h2 class="step-title">Action Items</h2>
+      <p class="step-subtitle">Track follow-up tasks, responsible parties, and completion status.</p>
+
+      <div class="stats-bar" id="actionStats">
+        <div class="stat-card"><div class="stat-value" id="totalActions">0</div><div class="stat-label">Total Items</div></div>
+        <div class="stat-card"><div class="stat-value" id="highPriority">0</div><div class="stat-label">High Priority</div></div>
+        <div class="stat-card"><div class="stat-value" id="completeActions">0</div><div class="stat-label">Complete</div></div>
+      </div>
+
+      <div class="form-card">
+        <h3>Add Action Item</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="actionDesc">Action / Task Description *</label>
+            <input type="text" id="actionDesc" placeholder="Describe the action item...">
+          </div>
+          <div class="form-group">
+            <label for="actionOwner">Owner</label>
+            <select id="actionOwner">
+              <option value="">Select or type below...</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="actionOwnerCustom">Owner (custom text)</label>
+          <input type="text" id="actionOwnerCustom" placeholder="If not in participant list, type name here">
+        </div>
+        <div class="form-row three">
+          <div class="form-group">
+            <label for="actionDue">Due Date</label>
+            <input type="date" id="actionDue">
+          </div>
+          <div class="form-group">
+            <label for="actionPriority">Priority</label>
+            <select id="actionPriority">
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="actionStatus">Status</label>
+            <select id="actionStatus">
+              <option value="Not Started">Not Started</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Complete">Complete</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="actionNotes">Notes</label>
+          <input type="text" id="actionNotes" placeholder="Additional notes...">
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="addActionItem()">+ Add Action Item</button>
+      </div>
+
+      <div class="form-card">
+        <h3>Action Items List</h3>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="actionTable">
+            <thead>
+              <tr><th>#</th><th>Action</th><th>Owner</th><th>Due Date</th><th>Priority</th><th>Status</th><th>Notes</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="actionTableBody"></tbody>
+          </table>
+        </div>
+        <p id="noActionsMsg" style="text-align:center; color:var(--gray-500); padding:20px; font-size:14px;">No action items added yet.</p>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-outline" onclick="goToStep(4)">&#8592; AAR Content</button>
+        <button class="btn btn-primary" onclick="goToStep(6)">Next: Generate Output &#8594;</button>
+      </div>
+    </section>
+
+    <!-- Step 6: Generate Output -->
+    <section class="step-panel" id="step6">
+      <h2 class="step-title">Generate Output</h2>
+      <p class="step-subtitle">Review your AAR and generate professional documents.</p>
+
+      <div class="generate-cards">
+        <div class="generate-card" onclick="generateDOCX()">
+          <div class="generate-card-icon">&#128196;</div>
+          <h3>AAR Report (DOCX)</h3>
+          <p>Professional Word document with cover page, sections, tables, and appendices.</p>
+          <button class="btn btn-primary">Generate DOCX</button>
+        </div>
+        <div class="generate-card" onclick="generateXLSX()">
+          <div class="generate-card-icon">&#128202;</div>
+          <h3>Action Tracker (XLSX)</h3>
+          <p>Excel workbook with action items and improvement plan tracking sheets.</p>
+          <button class="btn btn-secondary">Generate XLSX</button>
+        </div>
+        <div class="generate-card" onclick="generateBoth()">
+          <div class="generate-card-icon">&#128230;</div>
+          <h3>Generate Both</h3>
+          <p>Download both the AAR report and the action tracker at once.</p>
+          <button class="btn btn-accent">Generate Both</button>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <h3>Report Preview</h3>
+        <div class="preview-container" id="reportPreview">
+          <p style="color:var(--gray-500); text-align:center; padding:40px;">Click "Refresh Preview" to see your report.</p>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-outline btn-sm" onclick="refreshPreview()">&#8635; Refresh Preview</button>
+        </div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-outline" onclick="goToStep(5)">&#8592; Action Items</button>
+        <div></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h2>&#9881; Brand Settings</h2>
+    <div class="form-group">
+      <label for="brandOrgName">Organization Name</label>
+      <input type="text" id="brandOrgName" value="UCHealth">
+    </div>
+    <div class="form-group">
+      <label for="brandLogo">Logo Upload</label>
+      <input type="file" id="brandLogo" accept="image/*" onchange="handleLogoUpload(event)">
+      <img id="logoPreview" class="logo-preview" style="display:none;">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="brandPrimaryColor">Primary Color</label>
+        <input type="color" id="brandPrimaryColor" value="#003B71">
+      </div>
+      <div class="form-group">
+        <label for="brandSecondaryColor">Secondary Color</label>
+        <input type="color" id="brandSecondaryColor" value="#0072CE">
+      </div>
+    </div>
+    <div class="form-group">
+      <label><input type="checkbox" id="brandFOUO"> Include "For Official Use Only" marking</label>
+    </div>
+    <div class="form-group">
+      <label for="brandDefaultDept">Default Department</label>
+      <input type="text" id="brandDefaultDept" placeholder="e.g., Emergency Management">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeSettings()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveSettings()">Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Participant Modal -->
+<div class="modal-overlay" id="editParticipantModal">
+  <div class="modal">
+    <h2>Edit Participant</h2>
+    <input type="hidden" id="editPIndex">
+    <div class="participant-edit-row">
+      <div class="form-group">
+        <label for="editPName">Name</label>
+        <input type="text" id="editPName">
+      </div>
+      <div class="form-group">
+        <label for="editPTitle">Title / Role</label>
+        <input type="text" id="editPTitle">
+      </div>
+    </div>
+    <div class="participant-edit-row">
+      <div class="form-group">
+        <label for="editPDept">Department</label>
+        <input type="text" id="editPDept">
+      </div>
+      <div class="form-group">
+        <label for="editPEmail">Email</label>
+        <input type="email" id="editPEmail">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeEditParticipant()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveEditParticipant()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Action Item Modal -->
+<div class="modal-overlay" id="editActionModal">
+  <div class="modal">
+    <h2>Edit Action Item</h2>
+    <input type="hidden" id="editAIndex">
+    <div class="form-group">
+      <label for="editADesc">Action / Task</label>
+      <input type="text" id="editADesc">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="editAOwner">Owner</label>
+        <input type="text" id="editAOwner">
+      </div>
+      <div class="form-group">
+        <label for="editADue">Due Date</label>
+        <input type="date" id="editADue">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="editAPriority">Priority</label>
+        <select id="editAPriority"><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select>
+      </div>
+      <div class="form-group">
+        <label for="editAStatus">Status</label>
+        <select id="editAStatus"><option value="Not Started">Not Started</option><option value="In Progress">In Progress</option><option value="Complete">Complete</option></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="editANotes">Notes</label>
+      <input type="text" id="editANotes">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeEditAction()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveEditAction()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ========================================
+// STATE
+// ========================================
+const APP_KEY = 'aar-builder-data';
+const BRAND_KEY = 'aar-builder-brand';
+const DRAFTS_KEY = 'aar-builder-drafts';
+
+let state = {
+  eventTitle: '', eventType: '', eventDateStart: '', eventDateEnd: '',
+  eventLocation: '', sponsorOrg: '', directorName: '', directorTitle: '',
+  overallAssessment: '',
+  participants: [],
+  uploadedFiles: [], // {name, type, size, text, useAsRef}
+  purpose: '', scope: '',
+  objectives: [], // {description, coreCapability, rating, analysis}
+  strengths: [], // {description, relatedObjective}
+  improvements: [], // {area, relatedObjective, recommendation, responsibleParty, targetDate}
+  scenarioNarrative: '', keyDecisions: '', resourceGaps: '', commIssues: '',
+  actionItems: [], // {description, owner, dueDate, priority, status, notes}
+};
+
+let brand = {
+  orgName: 'UCHealth',
+  logoBase64: '',
+  primaryColor: '#003B71',
+  secondaryColor: '#0072CE',
+  fouo: false,
+  defaultDept: ''
+};
+
+let currentStep = 1;
+
+// ========================================
+// FEMA CORE CAPABILITIES
+// ========================================
+const FEMA_CAPABILITIES = [
+  'Planning', 'Public Information and Warning', 'Operational Coordination',
+  'Intelligence and Information Sharing', 'Interdiction and Disruption',
+  'Screening, Search, and Detection', 'Access Control and Identity Verification',
+  'Physical Protective Measures', 'Risk Management for Protection Programs and Activities',
+  'Supply Chain Integrity and Security', 'Community Resilience',
+  'Long-term Vulnerability Reduction', 'Risk and Disaster Resilience Assessment',
+  'Threats and Hazards Identification', 'Infrastructure Systems',
+  'Critical Transportation', 'Environmental Response/Health and Safety',
+  'Fatality Management Services', 'Mass Care Services',
+  'Mass Search and Rescue Operations', 'On-scene Security, Protection, and Law Enforcement',
+  'Operational Communications', 'Public Health, Healthcare, and Emergency Medical Services',
+  'Situational Assessment', 'Logistics and Supply Chain Management',
+  'Economic Recovery', 'Health and Social Services', 'Housing',
+  'Natural and Cultural Resources', 'N/A'
+];
+
+// ========================================
+// ACRONYMS
+// ========================================
+const EM_ACRONYMS = [
+  ['AAR', 'After-Action Report'],
+  ['COOP', 'Continuity of Operations Plan'],
+  ['EAP', 'Emergency Action Plan'],
+  ['EM', 'Emergency Management'],
+  ['EMP', 'Emergency Management Program'],
+  ['EMS', 'Emergency Medical Services'],
+  ['EOC', 'Emergency Operations Center'],
+  ['EOP', 'Emergency Operations Plan'],
+  ['ESF', 'Emergency Support Function'],
+  ['FEMA', 'Federal Emergency Management Agency'],
+  ['HAZMAT', 'Hazardous Materials'],
+  ['HICS', 'Hospital Incident Command System'],
+  ['HSEEP', 'Homeland Security Exercise and Evaluation Program'],
+  ['IAP', 'Incident Action Plan'],
+  ['IC', 'Incident Commander'],
+  ['ICS', 'Incident Command System'],
+  ['IHP', 'Improvement Plan'],
+  ['IMT', 'Incident Management Team'],
+  ['IP', 'Improvement Plan'],
+  ['JIC', 'Joint Information Center'],
+  ['MAC', 'Multi-Agency Coordination'],
+  ['MCI', 'Mass Casualty Incident'],
+  ['MOB', 'Mobilization'],
+  ['NIMS', 'National Incident Management System'],
+  ['NRF', 'National Response Framework'],
+  ['PPE', 'Personal Protective Equipment'],
+  ['PIO', 'Public Information Officer'],
+  ['POC', 'Point of Contact'],
+  ['SitRep', 'Situation Report'],
+  ['SOP', 'Standard Operating Procedure'],
+  ['TTX', 'Tabletop Exercise'],
+  ['UC', 'Unified Command'],
+];
+
+// ========================================
+// NAVIGATION
+// ========================================
+function goToStep(n) {
+  collectCurrentStepData();
+  currentStep = n;
+  document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('step' + n).classList.add('active');
+  document.querySelectorAll('.sidebar-nav li').forEach(li => {
+    li.classList.remove('active');
+    if (parseInt(li.dataset.step) === n) li.classList.add('active');
+  });
+  updateStepCompleteness();
+  if (n === 4) updateReferencePanel();
+  if (n === 5) updateActionOwnerDropdown();
+  if (n === 6) refreshPreview();
+  autoSave();
+  window.scrollTo(0, 0);
+}
+
+document.querySelectorAll('.sidebar-nav li').forEach(li => {
+  li.addEventListener('click', () => goToStep(parseInt(li.dataset.step)));
+});
+
+function updateStepCompleteness() {
+  const nav = document.querySelectorAll('.sidebar-nav li');
+  // Step 1 complete if title + type filled
+  if (state.eventTitle && state.eventType) nav[0].classList.add('completed'); else nav[0].classList.remove('completed');
+  // Step 2 complete if at least 1 participant
+  if (state.participants.length > 0) nav[1].classList.add('completed'); else nav[1].classList.remove('completed');
+  // Step 3 — optional
+  if (state.uploadedFiles.length > 0) nav[2].classList.add('completed'); else nav[2].classList.remove('completed');
+  // Step 4 complete if purpose or scope filled and at least 1 objective
+  if ((state.purpose || state.scope) && state.objectives.length > 0) nav[3].classList.add('completed'); else nav[3].classList.remove('completed');
+  // Step 5
+  if (state.actionItems.length > 0) nav[4].classList.add('completed'); else nav[4].classList.remove('completed');
+}
+
+// ========================================
+// DATA COLLECTION
+// ========================================
+function collectCurrentStepData() {
+  // Always collect all steps — fields persist
+  state.eventTitle = document.getElementById('eventTitle').value;
+  state.eventType = document.getElementById('eventType').value;
+  state.eventDateStart = document.getElementById('eventDateStart').value;
+  state.eventDateEnd = document.getElementById('eventDateEnd').value;
+  state.eventLocation = document.getElementById('eventLocation').value;
+  state.sponsorOrg = document.getElementById('sponsorOrg').value;
+  state.directorName = document.getElementById('directorName').value;
+  state.directorTitle = document.getElementById('directorTitle').value;
+  state.overallAssessment = document.getElementById('overallAssessment').value;
+  state.purpose = document.getElementById('purpose').value;
+  state.scope = document.getElementById('scope').value;
+  state.scenarioNarrative = document.getElementById('scenarioNarrative').value;
+  state.keyDecisions = document.getElementById('keyDecisions').value;
+  state.resourceGaps = document.getElementById('resourceGaps').value;
+  state.commIssues = document.getElementById('commIssues').value;
+  collectObjectives();
+  collectStrengths();
+  collectImprovements();
+}
+
+function populateFields() {
+  document.getElementById('eventTitle').value = state.eventTitle || '';
+  document.getElementById('eventType').value = state.eventType || '';
+  document.getElementById('eventDateStart').value = state.eventDateStart || '';
+  document.getElementById('eventDateEnd').value = state.eventDateEnd || '';
+  document.getElementById('eventLocation').value = state.eventLocation || '';
+  document.getElementById('sponsorOrg').value = state.sponsorOrg || '';
+  document.getElementById('directorName').value = state.directorName || '';
+  document.getElementById('directorTitle').value = state.directorTitle || '';
+  document.getElementById('overallAssessment').value = state.overallAssessment || '';
+  document.getElementById('purpose').value = state.purpose || '';
+  document.getElementById('scope').value = state.scope || '';
+  document.getElementById('scenarioNarrative').value = state.scenarioNarrative || '';
+  document.getElementById('keyDecisions').value = state.keyDecisions || '';
+  document.getElementById('resourceGaps').value = state.resourceGaps || '';
+  document.getElementById('commIssues').value = state.commIssues || '';
+  renderParticipants();
+  renderObjectives();
+  renderStrengths();
+  renderImprovements();
+  renderActionItems();
+  renderUploadedFiles();
+}
+
+// ========================================
+// PARTICIPANTS
+// ========================================
+function addParticipant(name, title, dept, email) {
+  const n = name || document.getElementById('pName').value.trim();
+  const t = title || document.getElementById('pTitle').value.trim();
+  const d = dept || document.getElementById('pDept').value.trim();
+  const e = email || document.getElementById('pEmail').value.trim();
+  if (!n) { showToast('Name is required', 'error'); return; }
+  state.participants.push({ name: n, title: t, department: d, email: e });
+  if (!name) { // only clear if from form
+    document.getElementById('pName').value = '';
+    document.getElementById('pTitle').value = '';
+    document.getElementById('pDept').value = '';
+    document.getElementById('pEmail').value = '';
+  }
+  renderParticipants();
+  autoSave();
+}
+
+function renderParticipants() {
+  const tbody = document.getElementById('participantTableBody');
+  const msg = document.getElementById('noParticipantsMsg');
+  tbody.innerHTML = '';
+  if (state.participants.length === 0) {
+    msg.style.display = 'block';
+    document.getElementById('participantCount').textContent = '0';
+    return;
+  }
+  msg.style.display = 'none';
+  document.getElementById('participantCount').textContent = state.participants.length;
+  state.participants.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i + 1}</td><td>${esc(p.name)}</td><td>${esc(p.title)}</td><td>${esc(p.department)}</td><td>${esc(p.email)}</td>
+      <td class="table-actions">
+        <button class="edit-btn" onclick="openEditParticipant(${i})">Edit</button>
+        <button class="delete-btn" onclick="deleteParticipant(${i})">Delete</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function deleteParticipant(i) {
+  state.participants.splice(i, 1);
+  renderParticipants();
+  autoSave();
+}
+
+function openEditParticipant(i) {
+  const p = state.participants[i];
+  document.getElementById('editPIndex').value = i;
+  document.getElementById('editPName').value = p.name;
+  document.getElementById('editPTitle').value = p.title;
+  document.getElementById('editPDept').value = p.department;
+  document.getElementById('editPEmail').value = p.email;
+  document.getElementById('editParticipantModal').classList.add('active');
+}
+
+function closeEditParticipant() { document.getElementById('editParticipantModal').classList.remove('active'); }
+
+function saveEditParticipant() {
+  const i = parseInt(document.getElementById('editPIndex').value);
+  state.participants[i] = {
+    name: document.getElementById('editPName').value.trim(),
+    title: document.getElementById('editPTitle').value.trim(),
+    department: document.getElementById('editPDept').value.trim(),
+    email: document.getElementById('editPEmail').value.trim()
+  };
+  closeEditParticipant();
+  renderParticipants();
+  autoSave();
+}
+
+function importParticipantsCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const lines = e.target.result.split('\n').filter(l => l.trim());
+      let startIdx = 0;
+      const header = lines[0].toLowerCase();
+      if (header.includes('name') || header.includes('title') || header.includes('department')) startIdx = 1;
+      let count = 0;
+      for (let i = startIdx; i < lines.length; i++) {
+        const cols = parseCSVLine(lines[i]);
+        if (cols[0] && cols[0].trim()) {
+          addParticipant(cols[0]?.trim() || '', cols[1]?.trim() || '', cols[2]?.trim() || '', cols[3]?.trim() || '');
+          count++;
+        }
+      }
+      showToast(`Imported ${count} participants`, 'success');
+    } catch (err) {
+      showToast('Failed to parse CSV: ' + err.message, 'error');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuotes = !inQuotes; }
+    else if (ch === ',' && !inQuotes) { result.push(current); current = ''; }
+    else { current += ch; }
+  }
+  result.push(current);
+  return result;
+}
+
+function importParticipantsXLSX(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      let count = 0;
+      data.forEach(row => {
+        const name = row['Name'] || row['name'] || row['NAME'] || Object.values(row)[0] || '';
+        const title = row['Title'] || row['title'] || row['Role'] || row['role'] || Object.values(row)[1] || '';
+        const dept = row['Department'] || row['department'] || row['Dept'] || Object.values(row)[2] || '';
+        const email = row['Email'] || row['email'] || Object.values(row)[3] || '';
+        if (name.toString().trim()) {
+          addParticipant(name.toString().trim(), title.toString().trim(), dept.toString().trim(), email.toString().trim());
+          count++;
+        }
+      });
+      showToast(`Imported ${count} participants`, 'success');
+    } catch (err) {
+      showToast('Failed to parse XLSX: ' + err.message, 'error');
+    }
+    event.target.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ========================================
+// FILE UPLOAD & TEXT EXTRACTION
+// ========================================
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+function handleFiles(files) {
+  Array.from(files).forEach(file => {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['docx', 'pptx', 'xlsx'].includes(ext)) {
+      showToast(`Unsupported file type: .${ext}`, 'error');
+      return;
+    }
+    const entry = { name: file.name, type: ext, size: formatFileSize(file.size), text: '', useAsRef: true, extracting: true };
+    state.uploadedFiles.push(entry);
+    renderUploadedFiles();
+    extractText(file, ext, state.uploadedFiles.length - 1);
+  });
+  fileInput.value = '';
+}
+
+async function extractText(file, ext, idx) {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    let text = '';
+    if (ext === 'docx') {
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      text = result.value;
+    } else if (ext === 'xlsx') {
+      const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+      wb.SheetNames.forEach(name => {
+        const ws = wb.Sheets[name];
+        text += `--- Sheet: ${name} ---\n`;
+        text += XLSX.utils.sheet_to_csv(ws) + '\n\n';
+      });
+    } else if (ext === 'pptx') {
+      const zip = await JSZip.loadAsync(arrayBuffer);
+      const slideFiles = Object.keys(zip.files).filter(f => /^ppt\/slides\/slide\d+\.xml$/i.test(f)).sort();
+      for (const sf of slideFiles) {
+        const slideNum = sf.match(/slide(\d+)/)[1];
+        const xml = await zip.files[sf].async('text');
+        const slideText = extractTextFromXML(xml);
+        if (slideText.trim()) {
+          text += `--- Slide ${slideNum} ---\n${slideText}\n\n`;
+        }
+      }
+    }
+    state.uploadedFiles[idx].text = text || '(No text content extracted)';
+    state.uploadedFiles[idx].extracting = false;
+    renderUploadedFiles();
+    autoSave();
+  } catch (err) {
+    state.uploadedFiles[idx].text = '(Extraction failed: ' + err.message + ')';
+    state.uploadedFiles[idx].extracting = false;
+    renderUploadedFiles();
+    showToast('Failed to extract text from ' + file.name, 'error');
+  }
+}
+
+function extractTextFromXML(xml) {
+  const texts = [];
+  const regex = /<a:t>([\s\S]*?)<\/a:t>/g;
+  let match;
+  while ((match = regex.exec(xml)) !== null) {
+    const decoded = match[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+    texts.push(decoded);
+  }
+  return texts.join(' ');
+}
+
+function renderUploadedFiles() {
+  const container = document.getElementById('fileList');
+  if (state.uploadedFiles.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = state.uploadedFiles.map((f, i) => `
+    <div class="file-item">
+      <div class="file-icon ${f.type}">${f.type.toUpperCase()}</div>
+      <div class="file-info">
+        <div class="file-name">${esc(f.name)}</div>
+        <div class="file-meta">${f.size} ${f.extracting ? '— Extracting text...' : ''}</div>
+      </div>
+      <div class="file-actions">
+        <button class="preview-toggle" onclick="toggleFilePreview(${i})">${f.extracting ? '...' : 'Preview'}</button>
+        <label class="toggle-switch" title="Use as reference">
+          <input type="checkbox" ${f.useAsRef ? 'checked' : ''} onchange="toggleFileRef(${i}, this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+        <button class="remove-item" onclick="removeFile(${i})" title="Remove">&times;</button>
+      </div>
+    </div>
+    <div class="file-preview" id="filePreview${i}">${esc(f.text || '')}</div>
+  `).join('');
+}
+
+function toggleFilePreview(i) {
+  document.getElementById('filePreview' + i).classList.toggle('open');
+}
+
+function toggleFileRef(i, checked) {
+  state.uploadedFiles[i].useAsRef = checked;
+  autoSave();
+}
+
+function removeFile(i) {
+  state.uploadedFiles.splice(i, 1);
+  renderUploadedFiles();
+  autoSave();
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// ========================================
+// REFERENCE PANEL
+// ========================================
+function updateReferencePanel() {
+  const container = document.getElementById('referencePanelContent');
+  const refs = state.uploadedFiles.filter(f => f.useAsRef && f.text);
+  if (refs.length === 0) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--gray-500);">No reference documents available. Upload files in Step 3 and mark them as references.</p>';
+    return;
+  }
+  container.innerHTML = refs.map((f, i) => `
+    <div class="ref-doc">
+      <div class="ref-doc-title" onclick="this.nextElementSibling.classList.toggle('open')">
+        ${esc(f.name)} <span style="font-size:11px;">&#9660;</span>
+      </div>
+      <div class="ref-doc-content">${esc(f.text)}</div>
+    </div>
+  `).join('');
+}
+
+// ========================================
+// OBJECTIVES
+// ========================================
+function buildCapabilityOptions(selected) {
+  return '<option value="">Select core capability...</option>' +
+    FEMA_CAPABILITIES.map(c => `<option value="${esc(c)}" ${selected === c ? 'selected' : ''}>${esc(c)}</option>`).join('');
+}
+
+function addObjective(data) {
+  const obj = data || { description: '', coreCapability: '', rating: '', analysis: '' };
+  state.objectives.push(obj);
+  renderObjectives();
+}
+
+function renderObjectives() {
+  const container = document.getElementById('objectivesContainer');
+  if (state.objectives.length === 0) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--gray-500); padding:12px;">No objectives added. Click "Add Objective" to begin.</p>';
+    return;
+  }
+  container.innerHTML = state.objectives.map((obj, i) => {
+    const uid = 'obj_' + i;
+    return `
+    <div class="dynamic-item" data-obj-index="${i}">
+      <div class="item-header">
+        <h4>Objective ${i + 1}</h4>
+        <button class="remove-item" onclick="removeObjective(${i})" title="Remove">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Objective Description</label>
+        <textarea class="obj-description" rows="3" placeholder="Describe the objective being tested...">${esc(obj.description)}</textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>FEMA Core Capability</label>
+          <select class="obj-capability">${buildCapabilityOptions(obj.coreCapability)}</select>
+        </div>
+        <div class="form-group">
+          <label>Performance Rating</label>
+          <div class="rating-group">
+            <label class="rating-option"><input type="radio" name="rating_${uid}" value="P" ${obj.rating === 'P' ? 'checked' : ''}><span class="rating-badge rate-p">P — No Challenges</span></label>
+            <label class="rating-option"><input type="radio" name="rating_${uid}" value="S" ${obj.rating === 'S' ? 'checked' : ''}><span class="rating-badge rate-s">S — Some Challenges</span></label>
+            <label class="rating-option"><input type="radio" name="rating_${uid}" value="M" ${obj.rating === 'M' ? 'checked' : ''}><span class="rating-badge rate-m">M — Major Challenges</span></label>
+            <label class="rating-option"><input type="radio" name="rating_${uid}" value="U" ${obj.rating === 'U' ? 'checked' : ''}><span class="rating-badge rate-u">U — Unable to Perform</span></label>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Analysis / Observations</label>
+        <textarea class="obj-analysis" rows="3" placeholder="What happened? Key observations...">${esc(obj.analysis)}</textarea>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function collectObjectives() {
+  const items = document.querySelectorAll('#objectivesContainer .dynamic-item');
+  state.objectives = Array.from(items).map((el, i) => ({
+    description: el.querySelector('.obj-description').value,
+    coreCapability: el.querySelector('.obj-capability').value,
+    rating: el.querySelector(`input[name="rating_obj_${i}"]:checked`)?.value || '',
+    analysis: el.querySelector('.obj-analysis').value,
+  }));
+}
+
+function removeObjective(i) {
+  collectObjectives();
+  state.objectives.splice(i, 1);
+  renderObjectives();
+  autoSave();
+}
+
+// ========================================
+// STRENGTHS
+// ========================================
+function buildObjectiveOptions(selected) {
+  return '<option value="">N/A</option>' +
+    state.objectives.map((o, i) => {
+      const label = o.description ? o.description.substring(0, 60) + (o.description.length > 60 ? '...' : '') : `Objective ${i + 1}`;
+      return `<option value="${i}" ${selected == i ? 'selected' : ''}>${esc('Obj ' + (i+1) + ': ' + label)}</option>`;
+    }).join('');
+}
+
+function addStrength(data) {
+  collectObjectives();
+  const s = data || { description: '', relatedObjective: '' };
+  state.strengths.push(s);
+  renderStrengths();
+}
+
+function renderStrengths() {
+  const container = document.getElementById('strengthsContainer');
+  if (state.strengths.length === 0) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--gray-500); padding:12px;">No strengths added yet.</p>';
+    return;
+  }
+  container.innerHTML = state.strengths.map((s, i) => `
+    <div class="dynamic-item" data-str-index="${i}">
+      <div class="item-header">
+        <h4>Strength ${i + 1}</h4>
+        <button class="remove-item" onclick="removeStrength(${i})" title="Remove">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea class="str-description" rows="3" placeholder="Describe what went well...">${esc(s.description)}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Related Objective</label>
+        <select class="str-objective">${buildObjectiveOptions(s.relatedObjective)}</select>
+      </div>
+    </div>
+  `).join('');
+}
+
+function collectStrengths() {
+  const items = document.querySelectorAll('#strengthsContainer .dynamic-item');
+  state.strengths = Array.from(items).map(el => ({
+    description: el.querySelector('.str-description').value,
+    relatedObjective: el.querySelector('.str-objective').value,
+  }));
+}
+
+function removeStrength(i) {
+  collectStrengths();
+  state.strengths.splice(i, 1);
+  renderStrengths();
+  autoSave();
+}
+
+// ========================================
+// AREAS FOR IMPROVEMENT
+// ========================================
+function addImprovement(data) {
+  collectObjectives();
+  const imp = data || { area: '', relatedObjective: '', recommendation: '', responsibleParty: '', targetDate: '' };
+  state.improvements.push(imp);
+  renderImprovements();
+}
+
+function renderImprovements() {
+  const container = document.getElementById('improvementsContainer');
+  if (state.improvements.length === 0) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--gray-500); padding:12px;">No areas for improvement added yet.</p>';
+    return;
+  }
+  container.innerHTML = state.improvements.map((imp, i) => `
+    <div class="dynamic-item" data-imp-index="${i}">
+      <div class="item-header">
+        <h4>Area ${i + 1}</h4>
+        <button class="remove-item" onclick="removeImprovement(${i})" title="Remove">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Area Description</label>
+        <textarea class="imp-area" rows="3" placeholder="Describe the area needing improvement...">${esc(imp.area)}</textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Related Objective</label>
+          <select class="imp-objective">${buildObjectiveOptions(imp.relatedObjective)}</select>
+        </div>
+        <div class="form-group">
+          <label>Responsible Party</label>
+          <input type="text" class="imp-responsible" value="${esc(imp.responsibleParty)}" placeholder="Who is responsible?">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Recommendation</label>
+        <textarea class="imp-recommendation" rows="3" placeholder="What should be done to address this?">${esc(imp.recommendation)}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Target Completion Date</label>
+        <input type="date" class="imp-target-date" value="${imp.targetDate || ''}">
+      </div>
+    </div>
+  `).join('');
+}
+
+function collectImprovements() {
+  const items = document.querySelectorAll('#improvementsContainer .dynamic-item');
+  state.improvements = Array.from(items).map(el => ({
+    area: el.querySelector('.imp-area').value,
+    relatedObjective: el.querySelector('.imp-objective').value,
+    recommendation: el.querySelector('.imp-recommendation').value,
+    responsibleParty: el.querySelector('.imp-responsible').value,
+    targetDate: el.querySelector('.imp-target-date').value,
+  }));
+}
+
+function removeImprovement(i) {
+  collectImprovements();
+  state.improvements.splice(i, 1);
+  renderImprovements();
+  autoSave();
+}
+
+// ========================================
+// ACTION ITEMS
+// ========================================
+function updateActionOwnerDropdown() {
+  const sel = document.getElementById('actionOwner');
+  sel.innerHTML = '<option value="">Select participant or type below...</option>' +
+    state.participants.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
+}
+
+function addActionItem(data) {
+  const item = data || {
+    description: document.getElementById('actionDesc').value.trim(),
+    owner: document.getElementById('actionOwner').value || document.getElementById('actionOwnerCustom').value.trim(),
+    dueDate: document.getElementById('actionDue').value,
+    priority: document.getElementById('actionPriority').value,
+    status: document.getElementById('actionStatus').value,
+    notes: document.getElementById('actionNotes').value.trim()
+  };
+  if (!item.description) { showToast('Action description is required', 'error'); return; }
+  state.actionItems.push(item);
+  if (!data) {
+    document.getElementById('actionDesc').value = '';
+    document.getElementById('actionOwner').value = '';
+    document.getElementById('actionOwnerCustom').value = '';
+    document.getElementById('actionDue').value = '';
+    document.getElementById('actionPriority').value = 'Medium';
+    document.getElementById('actionStatus').value = 'Not Started';
+    document.getElementById('actionNotes').value = '';
+  }
+  renderActionItems();
+  autoSave();
+}
+
+function renderActionItems() {
+  const tbody = document.getElementById('actionTableBody');
+  const msg = document.getElementById('noActionsMsg');
+  tbody.innerHTML = '';
+  if (state.actionItems.length === 0) { msg.style.display = 'block'; updateActionStats(); return; }
+  msg.style.display = 'none';
+  state.actionItems.forEach((a, i) => {
+    const prClass = a.priority === 'High' ? 'priority-high' : a.priority === 'Low' ? 'priority-low' : 'priority-medium';
+    const stClass = a.status === 'Complete' ? 'status-complete' : a.status === 'In Progress' ? 'status-in-progress' : 'status-not-started';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i + 1}</td><td>${esc(a.description)}</td><td>${esc(a.owner)}</td>
+      <td>${a.dueDate || '—'}</td><td class="${prClass}">${a.priority}</td>
+      <td class="${stClass}">${a.status}</td><td>${esc(a.notes)}</td>
+      <td class="table-actions">
+        <button class="edit-btn" onclick="openEditAction(${i})">Edit</button>
+        <button class="delete-btn" onclick="deleteActionItem(${i})">Delete</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  updateActionStats();
+}
+
+function updateActionStats() {
+  document.getElementById('totalActions').textContent = state.actionItems.length;
+  document.getElementById('highPriority').textContent = state.actionItems.filter(a => a.priority === 'High').length;
+  document.getElementById('completeActions').textContent = state.actionItems.filter(a => a.status === 'Complete').length;
+}
+
+function deleteActionItem(i) {
+  state.actionItems.splice(i, 1);
+  renderActionItems();
+  autoSave();
+}
+
+function openEditAction(i) {
+  const a = state.actionItems[i];
+  document.getElementById('editAIndex').value = i;
+  document.getElementById('editADesc').value = a.description;
+  document.getElementById('editAOwner').value = a.owner;
+  document.getElementById('editADue').value = a.dueDate;
+  document.getElementById('editAPriority').value = a.priority;
+  document.getElementById('editAStatus').value = a.status;
+  document.getElementById('editANotes').value = a.notes;
+  document.getElementById('editActionModal').classList.add('active');
+}
+
+function closeEditAction() { document.getElementById('editActionModal').classList.remove('active'); }
+
+function saveEditAction() {
+  const i = parseInt(document.getElementById('editAIndex').value);
+  state.actionItems[i] = {
+    description: document.getElementById('editADesc').value.trim(),
+    owner: document.getElementById('editAOwner').value.trim(),
+    dueDate: document.getElementById('editADue').value,
+    priority: document.getElementById('editAPriority').value,
+    status: document.getElementById('editAStatus').value,
+    notes: document.getElementById('editANotes').value.trim()
+  };
+  closeEditAction();
+  renderActionItems();
+  autoSave();
+}
+
+// ========================================
+// SETTINGS / BRAND
+// ========================================
+function openSettings() {
+  document.getElementById('brandOrgName').value = brand.orgName;
+  document.getElementById('brandPrimaryColor').value = brand.primaryColor;
+  document.getElementById('brandSecondaryColor').value = brand.secondaryColor;
+  document.getElementById('brandFOUO').checked = brand.fouo;
+  document.getElementById('brandDefaultDept').value = brand.defaultDept || '';
+  if (brand.logoBase64) {
+    document.getElementById('logoPreview').src = brand.logoBase64;
+    document.getElementById('logoPreview').style.display = 'block';
+  }
+  document.getElementById('settingsModal').classList.add('active');
+}
+
+function closeSettings() { document.getElementById('settingsModal').classList.remove('active'); }
+
+function saveSettings() {
+  brand.orgName = document.getElementById('brandOrgName').value.trim() || 'UCHealth';
+  brand.primaryColor = document.getElementById('brandPrimaryColor').value;
+  brand.secondaryColor = document.getElementById('brandSecondaryColor').value;
+  brand.fouo = document.getElementById('brandFOUO').checked;
+  brand.defaultDept = document.getElementById('brandDefaultDept').value.trim();
+  localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
+  showToast('Brand settings saved', 'success');
+  closeSettings();
+}
+
+function handleLogoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    brand.logoBase64 = e.target.result;
+    document.getElementById('logoPreview').src = brand.logoBase64;
+    document.getElementById('logoPreview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ========================================
+// SAVE / LOAD / AUTOSAVE
+// ========================================
+function autoSave() {
+  collectCurrentStepData();
+  localStorage.setItem(APP_KEY, JSON.stringify(state));
+  const ind = document.getElementById('autosaveIndicator');
+  ind.textContent = 'Saved ' + new Date().toLocaleTimeString();
+}
+
+setInterval(autoSave, 30000);
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem(APP_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      state = { ...state, ...parsed };
+    }
+  } catch (e) { /* ignore parse errors */ }
+  try {
+    const savedBrand = localStorage.getItem(BRAND_KEY);
+    if (savedBrand) brand = { ...brand, ...JSON.parse(savedBrand) };
+  } catch (e) { /* ignore */ }
+  populateFields();
+  loadDraftList();
+}
+
+function saveDraft() {
+  collectCurrentStepData();
+  const name = prompt('Enter a name for this draft:', state.eventTitle || 'Untitled AAR');
+  if (!name) return;
+  let drafts = {};
+  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}'); } catch (e) { drafts = {}; }
+  drafts[name] = JSON.parse(JSON.stringify(state));
+  localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+  loadDraftList();
+  showToast('Draft saved: ' + name, 'success');
+}
+
+function loadDraftList() {
+  const sel = document.getElementById('draftSelector');
+  sel.innerHTML = '<option value="">-- Saved Drafts --</option>';
+  try {
+    const drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}');
+    Object.keys(drafts).forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+  } catch (e) { /* ignore */ }
+}
+
+document.getElementById('draftSelector').addEventListener('change', function() {
+  const name = this.value;
+  if (!name) return;
+  if (!confirm('Load draft "' + name + '"? Unsaved changes will be lost.')) { this.value = ''; return; }
+  try {
+    const drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}');
+    if (drafts[name]) {
+      state = { ...state, ...drafts[name] };
+      populateFields();
+      showToast('Loaded draft: ' + name, 'success');
+    }
+  } catch (e) { showToast('Failed to load draft', 'error'); }
+  this.value = '';
+});
+
+function exportJSON() {
+  collectCurrentStepData();
+  const blob = new Blob([JSON.stringify({ state, brand }, null, 2)], { type: 'application/json' });
+  saveAs(blob, (state.eventTitle || 'aar-draft').replace(/[^a-zA-Z0-9]/g, '_') + '.json');
+  showToast('JSON exported', 'success');
+}
+
+function importJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.state) state = { ...state, ...data.state };
+      if (data.brand) brand = { ...brand, ...data.brand };
+      localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
+      populateFields();
+      showToast('JSON imported successfully', 'success');
+    } catch (err) {
+      showToast('Invalid JSON file', 'error');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ========================================
+// HTML PREVIEW
+// ========================================
+function refreshPreview() {
+  collectCurrentStepData();
+  const c = document.getElementById('reportPreview');
+  const dateStr = state.eventDateStart ? formatDate(state.eventDateStart) + (state.eventDateEnd ? ' — ' + formatDate(state.eventDateEnd) : '') : 'N/A';
+  const ratingLabels = { P: 'Performed without Challenges', S: 'Performed with Some Challenges', M: 'Performed with Major Challenges', U: 'Unable to be Performed' };
+  const ratingBadgeClass = { P: 'p-badge', S: 's-badge', M: 'm-badge', U: 'u-badge' };
+
+  let html = `<h1>${esc(state.eventTitle || 'Untitled AAR')}</h1>`;
+  html += `<p><strong>After-Action Report</strong> | ${esc(state.eventType || 'N/A')} | ${dateStr}</p>`;
+  if (brand.fouo) html += `<p style="color:var(--red); font-weight:600;">FOR OFFICIAL USE ONLY</p>`;
+  html += `<hr style="border:none;border-top:2px solid var(--primary);margin:16px 0;">`;
+
+  // Executive Summary
+  html += `<h2>1. Executive Summary</h2>`;
+  if (state.purpose) html += `<h3>Purpose</h3><p>${esc(state.purpose)}</p>`;
+  if (state.scope) html += `<h3>Scope</h3><p>${esc(state.scope)}</p>`;
+
+  // Event Overview
+  html += `<h2>2. Event Overview</h2>`;
+  html += `<table><tr><th>Field</th><th>Detail</th></tr>`;
+  html += `<tr><td>Event Title</td><td>${esc(state.eventTitle)}</td></tr>`;
+  html += `<tr><td>Event Type</td><td>${esc(state.eventType)}</td></tr>`;
+  html += `<tr><td>Date(s)</td><td>${dateStr}</td></tr>`;
+  html += `<tr><td>Location</td><td>${esc(state.eventLocation)}</td></tr>`;
+  html += `<tr><td>Sponsoring Org</td><td>${esc(state.sponsorOrg)}</td></tr>`;
+  html += `<tr><td>Director</td><td>${esc(state.directorName)}${state.directorTitle ? ', ' + esc(state.directorTitle) : ''}</td></tr>`;
+  html += `</table>`;
+  if (state.overallAssessment) html += `<h3>Overall Assessment</h3><p>${esc(state.overallAssessment)}</p>`;
+
+  // Objectives
+  html += `<h2>3. Objectives and Performance</h2>`;
+  if (state.objectives.length === 0) { html += '<p style="color:var(--gray-500);">No objectives entered.</p>'; }
+  state.objectives.forEach((obj, i) => {
+    html += `<h3>Objective ${i + 1}: ${esc(obj.description || 'Untitled')}</h3>`;
+    if (obj.coreCapability) html += `<p><strong>Core Capability:</strong> ${esc(obj.coreCapability)}</p>`;
+    if (obj.rating) html += `<p><strong>Rating:</strong> <span class="preview-badge ${ratingBadgeClass[obj.rating] || ''}">${obj.rating} — ${ratingLabels[obj.rating] || ''}</span></p>`;
+    if (obj.analysis) html += `<p>${esc(obj.analysis)}</p>`;
+  });
+
+  // Strengths
+  html += `<h2>4. Strengths</h2>`;
+  if (state.strengths.length === 0) { html += '<p style="color:var(--gray-500);">No strengths entered.</p>'; }
+  else {
+    html += '<ul>';
+    state.strengths.forEach(s => {
+      const objRef = s.relatedObjective !== '' && state.objectives[parseInt(s.relatedObjective)] ? ' (Obj ' + (parseInt(s.relatedObjective) + 1) + ')' : '';
+      html += `<li>${esc(s.description)}${objRef}</li>`;
+    });
+    html += '</ul>';
+  }
+
+  // Areas for Improvement
+  html += `<h2>5. Areas for Improvement</h2>`;
+  if (state.improvements.length > 0) {
+    html += `<table><tr><th>#</th><th>Area</th><th>Objective</th><th>Recommendation</th><th>Responsible</th><th>Target Date</th></tr>`;
+    state.improvements.forEach((imp, i) => {
+      const objRef = imp.relatedObjective !== '' && state.objectives[parseInt(imp.relatedObjective)] ? 'Obj ' + (parseInt(imp.relatedObjective) + 1) : '—';
+      html += `<tr><td>${i + 1}</td><td>${esc(imp.area)}</td><td>${objRef}</td><td>${esc(imp.recommendation)}</td><td>${esc(imp.responsibleParty)}</td><td>${imp.targetDate ? formatDate(imp.targetDate) : '—'}</td></tr>`;
+    });
+    html += `</table>`;
+  } else { html += '<p style="color:var(--gray-500);">None entered.</p>'; }
+
+  // Additional Context
+  html += `<h2>6. Additional Context</h2>`;
+  if (state.scenarioNarrative) html += `<h3>Scenario Narrative</h3><p>${esc(state.scenarioNarrative)}</p>`;
+  if (state.keyDecisions) html += `<h3>Key Decisions Made</h3><p>${esc(state.keyDecisions)}</p>`;
+  if (state.resourceGaps) html += `<h3>Resource Gaps Identified</h3><p>${esc(state.resourceGaps)}</p>`;
+  if (state.commIssues) html += `<h3>Communication Issues</h3><p>${esc(state.commIssues)}</p>`;
+
+  // Participants
+  html += `<h2>Appendix A: Participants (${state.participants.length})</h2>`;
+  if (state.participants.length > 0) {
+    html += `<table><tr><th>#</th><th>Name</th><th>Title</th><th>Department</th><th>Email</th></tr>`;
+    state.participants.forEach((p, i) => {
+      html += `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td>${esc(p.title)}</td><td>${esc(p.department)}</td><td>${esc(p.email)}</td></tr>`;
+    });
+    html += `</table>`;
+  }
+
+  // Action Items
+  html += `<h2>Appendix B: Action Items (${state.actionItems.length})</h2>`;
+  if (state.actionItems.length > 0) {
+    html += `<table><tr><th>#</th><th>Action</th><th>Owner</th><th>Due</th><th>Priority</th><th>Status</th><th>Notes</th></tr>`;
+    state.actionItems.forEach((a, i) => {
+      html += `<tr><td>${i + 1}</td><td>${esc(a.description)}</td><td>${esc(a.owner)}</td><td>${a.dueDate ? formatDate(a.dueDate) : '—'}</td><td>${a.priority}</td><td>${a.status}</td><td>${esc(a.notes)}</td></tr>`;
+    });
+    html += `</table>`;
+  }
+
+  c.innerHTML = html;
+}
+
+// ========================================
+// DOCX GENERATION
+// ========================================
+async function generateDOCX() {
+  collectCurrentStepData();
+  showToast('Generating DOCX...', '');
+
+  try {
+    const {
+      Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+      HeadingLevel, AlignmentType, BorderStyle, WidthType, PageBreak,
+      Header, Footer, PageNumber, NumberFormat, ImageRun, Tab, TabStopPosition, TabStopType,
+      ShadingType, TableLayoutType, VerticalAlign, convertInchesToTwip
+    } = docx;
+
+    const primaryHex = brand.primaryColor.replace('#', '');
+    const secondaryHex = brand.secondaryColor.replace('#', '');
+    const dateStr = state.eventDateStart ? formatDate(state.eventDateStart) + (state.eventDateEnd ? ' - ' + formatDate(state.eventDateEnd) : '') : 'N/A';
+    const ratingLabels = { P: 'Performed without Challenges (P)', S: 'Performed with Some Challenges (S)', M: 'Performed with Major Challenges (M)', U: 'Unable to be Performed (U)' };
+    const ratingColors = { P: '38A169', S: 'D69E2E', M: 'DD6B20', U: 'E53E3E' };
+
+    // Helper: create a table cell with consistent borders
+    function tc(content, opts = {}) {
+      const children = Array.isArray(content) ? content : [new Paragraph({ children: [new TextRun({ text: content || '', size: opts.fontSize || 20, font: 'Calibri', bold: opts.bold, color: opts.fontColor })] })];
+      return new TableCell({
+        children,
+        shading: opts.shading ? { type: ShadingType.SOLID, color: opts.shading } : undefined,
+        width: opts.width ? { size: opts.width, type: WidthType.PERCENTAGE } : undefined,
+        verticalAlign: VerticalAlign.CENTER,
+        margins: { top: 60, bottom: 60, left: 80, right: 80 },
+      });
+    }
+
+    // Helper: header row cell
+    function thCell(text, width) {
+      return tc(text, { shading: primaryHex, fontColor: 'FFFFFF', bold: true, fontSize: 18, width });
+    }
+
+    // Build sections array
+    const sections = [];
+    const children = [];
+
+    // --- COVER PAGE ---
+    children.push(new Paragraph({ spacing: { before: 3000 } }));
+
+    if (brand.logoBase64) {
+      try {
+        const logoResp = await fetch(brand.logoBase64);
+        const logoBlob = await logoResp.blob();
+        const logoArr = await logoBlob.arrayBuffer();
+        children.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new ImageRun({ data: logoArr, transformation: { width: 200, height: 80 }, type: 'png' })],
+          spacing: { after: 400 },
+        }));
+      } catch (e) { /* skip logo on error */ }
+    }
+
+    children.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 200 },
+      children: [new TextRun({ text: brand.orgName, size: 36, font: 'Calibri', color: primaryHex, bold: true })],
+    }));
+
+    children.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 600, after: 200 },
+      children: [new TextRun({ text: state.eventTitle || 'After-Action Report', size: 52, font: 'Calibri', color: primaryHex, bold: true })],
+    }));
+
+    children.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 200 },
+      children: [new TextRun({ text: 'After-Action Report', size: 36, font: 'Calibri', color: secondaryHex })],
+    }));
+
+    children.push(new Paragraph({ spacing: { before: 400 } }));
+
+    const coverDetails = [
+      ['Event Type', state.eventType],
+      ['Date(s)', dateStr],
+      ['Location', state.eventLocation],
+      ['Sponsoring Organization', state.sponsorOrg],
+      ['Director', state.directorName + (state.directorTitle ? ', ' + state.directorTitle : '')],
+    ];
+    coverDetails.forEach(([label, value]) => {
+      if (value && value.trim()) {
+        children.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 80 },
+          children: [
+            new TextRun({ text: label + ': ', size: 22, font: 'Calibri', color: '718096', bold: true }),
+            new TextRun({ text: value, size: 22, font: 'Calibri', color: '2D3748' }),
+          ],
+        }));
+      }
+    });
+
+    if (brand.fouo) {
+      children.push(new Paragraph({ spacing: { before: 600 } }));
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: 'FOR OFFICIAL USE ONLY', size: 28, font: 'Calibri', color: 'E53E3E', bold: true })],
+        border: { top: { color: 'E53E3E', space: 4, style: BorderStyle.SINGLE, size: 6 }, bottom: { color: 'E53E3E', space: 4, style: BorderStyle.SINGLE, size: 6 } },
+      }));
+    }
+
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+
+    // --- TABLE OF CONTENTS ---
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Table of Contents', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 300 } }));
+
+    const tocEntries = [
+      'Section 1: Executive Summary',
+      'Section 2: Exercise/Incident Overview',
+      'Section 3: Objectives and Performance',
+      'Section 4: Strengths',
+      'Section 5: Areas for Improvement',
+      'Section 6: Additional Context',
+      'Appendix A: Participant List',
+      'Appendix B: Improvement Plan Tracking',
+      'Appendix C: Acronym List',
+    ];
+    tocEntries.forEach((entry, i) => {
+      children.push(new Paragraph({
+        spacing: { after: 100 },
+        children: [new TextRun({ text: entry, size: 22, font: 'Calibri', color: secondaryHex })],
+      }));
+    });
+
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+
+    // --- SECTION 1: EXECUTIVE SUMMARY ---
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 1: Executive Summary', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+
+    if (state.purpose) {
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Purpose', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 200, after: 100 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: state.purpose, size: 22, font: 'Calibri' })], spacing: { after: 200 } }));
+    }
+    if (state.scope) {
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Scope', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 200, after: 100 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: state.scope, size: 22, font: 'Calibri' })], spacing: { after: 200 } }));
+    }
+
+    // --- SECTION 2: OVERVIEW ---
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 2: Exercise/Incident Overview', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+
+    const overviewData = [
+      ['Event Title', state.eventTitle],
+      ['Event Type', state.eventType],
+      ['Date(s)', dateStr],
+      ['Location(s)', state.eventLocation],
+      ['Sponsoring Organization', state.sponsorOrg],
+      ['Exercise/Incident Director', state.directorName + (state.directorTitle ? ', ' + state.directorTitle : '')],
+    ];
+
+    const overviewRows = overviewData.map(([label, value], i) => {
+      const shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+      return new TableRow({
+        children: [
+          tc(label, { bold: true, shading: shade, width: 35 }),
+          tc(value || 'N/A', { shading: shade, width: 65 }),
+        ],
+      });
+    });
+
+    children.push(new Table({ rows: overviewRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+    if (state.overallAssessment) {
+      children.push(new Paragraph({ spacing: { before: 300 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Overall Assessment', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { after: 100 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: state.overallAssessment, size: 22, font: 'Calibri' })], spacing: { after: 200 } }));
+    }
+
+    // --- SECTION 3: OBJECTIVES ---
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 3: Objectives and Performance', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+
+    state.objectives.forEach((obj, i) => {
+      children.push(new Paragraph({
+        heading: HeadingLevel.HEADING_2,
+        children: [new TextRun({ text: `Objective ${i + 1}: ${obj.description || 'Untitled'}`, bold: true, color: secondaryHex, font: 'Calibri', size: 26 })],
+        spacing: { before: 300, after: 100 },
+      }));
+
+      if (obj.coreCapability) {
+        children.push(new Paragraph({
+          children: [
+            new TextRun({ text: 'Core Capability: ', bold: true, size: 22, font: 'Calibri', color: '4A5568' }),
+            new TextRun({ text: obj.coreCapability, size: 22, font: 'Calibri' }),
+          ],
+          spacing: { after: 80 },
+        }));
+      }
+
+      if (obj.rating) {
+        children.push(new Paragraph({
+          children: [
+            new TextRun({ text: 'Performance Rating: ', bold: true, size: 22, font: 'Calibri', color: '4A5568' }),
+            new TextRun({ text: ratingLabels[obj.rating] || obj.rating, size: 22, font: 'Calibri', bold: true, color: ratingColors[obj.rating] || '2D3748' }),
+          ],
+          spacing: { after: 80 },
+        }));
+      }
+
+      if (obj.analysis) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: 'Analysis:', bold: true, size: 22, font: 'Calibri', color: '4A5568' })],
+          spacing: { before: 100, after: 40 },
+        }));
+        children.push(new Paragraph({ children: [new TextRun({ text: obj.analysis, size: 22, font: 'Calibri' })], spacing: { after: 200 } }));
+      }
+    });
+
+    if (state.objectives.length === 0) {
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No objectives were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 200 } }));
+    }
+
+    // --- SECTION 4: STRENGTHS ---
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 4: Strengths', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+
+    state.strengths.forEach(s => {
+      const objRef = s.relatedObjective !== '' && state.objectives[parseInt(s.relatedObjective)]
+        ? ' [Objective ' + (parseInt(s.relatedObjective) + 1) + ']'
+        : '';
+      children.push(new Paragraph({
+        bullet: { level: 0 },
+        children: [
+          new TextRun({ text: s.description, size: 22, font: 'Calibri' }),
+          new TextRun({ text: objRef, size: 20, font: 'Calibri', italics: true, color: '718096' }),
+        ],
+        spacing: { after: 80 },
+      }));
+    });
+
+    if (state.strengths.length === 0) {
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No strengths were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 200 } }));
+    }
+
+    // --- SECTION 5: AREAS FOR IMPROVEMENT ---
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 5: Areas for Improvement', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+
+    if (state.improvements.length > 0) {
+      const impHeader = new TableRow({
+        children: [thCell('#', 5), thCell('Area', 25), thCell('Objective', 15), thCell('Recommendation', 25), thCell('Responsible', 15), thCell('Target Date', 15)],
+      });
+      const impRows = state.improvements.map((imp, i) => {
+        const objRef = imp.relatedObjective !== '' && state.objectives[parseInt(imp.relatedObjective)] ? 'Obj ' + (parseInt(imp.relatedObjective) + 1) : '—';
+        const shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+        return new TableRow({
+          children: [
+            tc(String(i + 1), { shading: shade, fontSize: 18 }),
+            tc(imp.area, { shading: shade, fontSize: 18 }),
+            tc(objRef, { shading: shade, fontSize: 18 }),
+            tc(imp.recommendation, { shading: shade, fontSize: 18 }),
+            tc(imp.responsibleParty, { shading: shade, fontSize: 18 }),
+            tc(imp.targetDate ? formatDate(imp.targetDate) : '—', { shading: shade, fontSize: 18 }),
+          ],
+        });
+      });
+      children.push(new Table({ rows: [impHeader, ...impRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
+    } else {
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No areas for improvement were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 200 } }));
+    }
+
+    // --- SECTION 6: ADDITIONAL CONTEXT ---
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 6: Additional Context', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+
+    const contextSections = [
+      ['Scenario Narrative', state.scenarioNarrative],
+      ['Key Decisions Made', state.keyDecisions],
+      ['Resource Gaps Identified', state.resourceGaps],
+      ['Communication Issues', state.commIssues],
+    ];
+    contextSections.forEach(([title, content]) => {
+      if (content && content.trim()) {
+        children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: title, bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 200, after: 100 } }));
+        children.push(new Paragraph({ children: [new TextRun({ text: content, size: 22, font: 'Calibri' })], spacing: { after: 200 } }));
+      }
+    });
+
+    // --- APPENDIX A: PARTICIPANTS ---
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix A: Participant List', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+
+    if (state.participants.length > 0) {
+      const pHeader = new TableRow({
+        children: [thCell('#', 8), thCell('Name', 25), thCell('Title/Role', 25), thCell('Department', 22), thCell('Email', 20)],
+      });
+      const pRows = state.participants.map((p, i) => {
+        const shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+        return new TableRow({
+          children: [
+            tc(String(i + 1), { shading: shade, fontSize: 18 }),
+            tc(p.name, { shading: shade, fontSize: 18 }),
+            tc(p.title, { shading: shade, fontSize: 18 }),
+            tc(p.department, { shading: shade, fontSize: 18 }),
+            tc(p.email, { shading: shade, fontSize: 18 }),
+          ],
+        });
+      });
+      children.push(new Table({ rows: [pHeader, ...pRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
+    } else {
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No participants were recorded.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 200 } }));
+    }
+
+    // --- APPENDIX B: ACTION ITEMS ---
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix B: Improvement Plan Tracking', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+
+    if (state.actionItems.length > 0) {
+      const aHeader = new TableRow({
+        children: [thCell('#', 5), thCell('Action', 25), thCell('Owner', 15), thCell('Due Date', 12), thCell('Priority', 10), thCell('Status', 12), thCell('Notes', 21)],
+      });
+      const aRows = state.actionItems.map((a, i) => {
+        const shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+        return new TableRow({
+          children: [
+            tc(String(i + 1), { shading: shade, fontSize: 18 }),
+            tc(a.description, { shading: shade, fontSize: 18 }),
+            tc(a.owner, { shading: shade, fontSize: 18 }),
+            tc(a.dueDate ? formatDate(a.dueDate) : '—', { shading: shade, fontSize: 18 }),
+            tc(a.priority, { shading: shade, fontSize: 18, fontColor: a.priority === 'High' ? 'E53E3E' : a.priority === 'Low' ? '38A169' : 'DD6B20' }),
+            tc(a.status, { shading: shade, fontSize: 18 }),
+            tc(a.notes, { shading: shade, fontSize: 18 }),
+          ],
+        });
+      });
+      children.push(new Table({ rows: [aHeader, ...aRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
+    } else {
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No action items were recorded.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 200 } }));
+    }
+
+    // --- APPENDIX C: ACRONYMS ---
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix C: Acronym List', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+
+    const acHeader = new TableRow({
+      children: [thCell('Acronym', 25), thCell('Definition', 75)],
+    });
+    const acRows = EM_ACRONYMS.map(([acr, def], i) => {
+      const shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+      return new TableRow({
+        children: [tc(acr, { shading: shade, bold: true, fontSize: 20 }), tc(def, { shading: shade, fontSize: 20 })],
+      });
+    });
+    children.push(new Table({ rows: [acHeader, ...acRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+    // --- BUILD DOCUMENT ---
+    const doc = new Document({
+      styles: {
+        default: {
+          document: { run: { font: 'Calibri', size: 22 } },
+        },
+      },
+      sections: [{
+        properties: {
+          page: {
+            size: { width: 12240, height: 15840 }, // Letter
+            margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 }, // 1 inch
+          },
+        },
+        headers: {
+          default: new Header({
+            children: [new Paragraph({
+              children: [
+                new TextRun({ text: brand.orgName, size: 18, font: 'Calibri', color: primaryHex, bold: true }),
+                new TextRun({ text: '\t' }),
+                new TextRun({ text: 'After-Action Report', size: 18, font: 'Calibri', color: '718096' }),
+              ],
+              tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
+            })],
+          }),
+        },
+        footers: {
+          default: new Footer({
+            children: [new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ text: dateStr + '   |   Page ', size: 16, font: 'Calibri', color: '718096' }),
+                new TextRun({ children: [PageNumber.CURRENT], size: 16, font: 'Calibri', color: '718096' }),
+              ],
+            })],
+          }),
+        },
+        children,
+      }],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const filename = (state.eventTitle || 'AAR').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_') + '_AAR.docx';
+    saveAs(blob, filename);
+    showToast('DOCX generated successfully!', 'success');
+  } catch (err) {
+    console.error('DOCX generation error:', err);
+    showToast('DOCX generation failed: ' + err.message, 'error');
+  }
+}
+
+// ========================================
+// XLSX GENERATION
+// ========================================
+function generateXLSX() {
+  collectCurrentStepData();
+  showToast('Generating XLSX...', '');
+
+  try {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Action Items
+    const actionData = state.actionItems.map((a, i) => ({
+      'ID': i + 1,
+      'Action': a.description,
+      'Owner': a.owner,
+      'Due Date': a.dueDate || '',
+      'Priority': a.priority,
+      'Status': a.status,
+      'Related Objective': '',
+      'Notes': a.notes,
+      'AAR Title': state.eventTitle,
+      'AAR Date': state.eventDateStart,
+    }));
+    if (actionData.length === 0) {
+      actionData.push({ 'ID': '', 'Action': '', 'Owner': '', 'Due Date': '', 'Priority': '', 'Status': '', 'Related Objective': '', 'Notes': '', 'AAR Title': '', 'AAR Date': '' });
+    }
+    const ws1 = XLSX.utils.json_to_sheet(actionData);
+    ws1['!cols'] = [
+      { wch: 5 }, { wch: 40 }, { wch: 20 }, { wch: 12 }, { wch: 10 },
+      { wch: 14 }, { wch: 20 }, { wch: 30 }, { wch: 30 }, { wch: 12 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Action Items');
+
+    // Sheet 2: Improvement Plan
+    const impData = state.improvements.map((imp, i) => {
+      const objRef = imp.relatedObjective !== '' && state.objectives[parseInt(imp.relatedObjective)]
+        ? 'Objective ' + (parseInt(imp.relatedObjective) + 1)
+        : '';
+      return {
+        '#': i + 1,
+        'Area for Improvement': imp.area,
+        'Related Objective': objRef,
+        'Recommendation': imp.recommendation,
+        'Responsible Party': imp.responsibleParty,
+        'Target Date': imp.targetDate || '',
+        'Status': 'Not Started',
+        'Evidence of Completion': '',
+        'Notes': '',
+      };
+    });
+    if (impData.length === 0) {
+      impData.push({ '#': '', 'Area for Improvement': '', 'Related Objective': '', 'Recommendation': '', 'Responsible Party': '', 'Target Date': '', 'Status': '', 'Evidence of Completion': '', 'Notes': '' });
+    }
+    const ws2 = XLSX.utils.json_to_sheet(impData);
+    ws2['!cols'] = [
+      { wch: 5 }, { wch: 35 }, { wch: 20 }, { wch: 35 }, { wch: 20 },
+      { wch: 12 }, { wch: 14 }, { wch: 25 }, { wch: 25 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Improvement Plan');
+
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+    const filename = (state.eventTitle || 'AAR').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_') + '_Tracker.xlsx';
+    saveAs(blob, filename);
+    showToast('XLSX generated successfully!', 'success');
+  } catch (err) {
+    console.error('XLSX generation error:', err);
+    showToast('XLSX generation failed: ' + err.message, 'error');
+  }
+}
+
+async function generateBoth() {
+  await generateDOCX();
+  await generateXLSX();
+}
+
+// ========================================
+// UTILITIES
+// ========================================
+function esc(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const parts = dateStr.split('-');
+    return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch (e) { return dateStr; }
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(t._timeout);
+  t._timeout = setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ========================================
+// INITIALIZATION
+// ========================================
+window.addEventListener('DOMContentLoaded', () => {
+  loadState();
+  updateStepCompleteness();
+});
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('active');
+  });
+});
+
+// Keyboard nav — Enter to submit participant
+document.getElementById('pEmail').addEventListener('keypress', e => { if (e.key === 'Enter') addParticipant(); });
+document.getElementById('pName').addEventListener('keypress', e => { if (e.key === 'Enter') addParticipant(); });
+document.getElementById('actionNotes').addEventListener('keypress', e => { if (e.key === 'Enter') addActionItem(); });
+document.getElementById('actionDesc').addEventListener('keypress', e => { if (e.key === 'Enter') addActionItem(); });
+</script>
+</body>
+</html>
