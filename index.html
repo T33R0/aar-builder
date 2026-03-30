@@ -2083,21 +2083,48 @@ function markComplete() {
 // ========================================
 function migrateDraftsV1toV2() {
   try {
-    var v1 = localStorage.getItem(DRAFTS_KEY);
-    if (!v1) return;
-    var old = JSON.parse(v1);
-    if (!old || typeof old !== 'object') return;
     var v2 = {};
     try { v2 = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
-    Object.keys(old).forEach(function(name) {
-      var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      v2[id] = {
-        meta: { id: id, name: name, status: 'draft', createdAt: Date.now(), updatedAt: Date.now(), eventType: old[name].eventType || '', eventDate: old[name].eventDateStart || '' },
-        state: old[name]
-      };
-    });
-    localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(v2));
-    localStorage.removeItem(DRAFTS_KEY);
+    var migrated = false;
+
+    // Migrate named drafts from V1
+    var v1 = localStorage.getItem(DRAFTS_KEY);
+    if (v1) {
+      var old = JSON.parse(v1);
+      if (old && typeof old === 'object') {
+        Object.keys(old).forEach(function(name) {
+          var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+          v2[id] = {
+            meta: { id: id, name: name, status: 'draft', createdAt: Date.now(), updatedAt: Date.now(), eventType: old[name].eventType || '', eventDate: old[name].eventDateStart || '' },
+            state: old[name]
+          };
+        });
+        localStorage.removeItem(DRAFTS_KEY);
+        migrated = true;
+      }
+    }
+
+    // Migrate active working state from APP_KEY (the auto-saved session)
+    var appState = localStorage.getItem(APP_KEY);
+    if (appState) {
+      var parsed = JSON.parse(appState);
+      if (parsed && (parsed.eventTitle || parsed.participants && parsed.participants.length > 0 || parsed.objectives && parsed.objectives.length > 0)) {
+        // Check it's not a duplicate of an already-migrated named draft
+        var isDupe = Object.values(v2).some(function(d) { return d.meta.name === parsed.eventTitle && d.state.eventType === parsed.eventType; });
+        if (!isDupe) {
+          var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+          v2[id] = {
+            meta: { id: id, name: parsed.eventTitle || 'Untitled AAR', status: 'draft', createdAt: Date.now(), updatedAt: Date.now(), eventType: parsed.eventType || '', eventDate: parsed.eventDateStart || '' },
+            state: parsed
+          };
+          migrated = true;
+        }
+      }
+    }
+
+    if (migrated || Object.keys(v2).length > 0) {
+      localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(v2));
+    }
   } catch(e) { console.error('Migration failed:', e); }
 }
 
