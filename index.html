@@ -1890,6 +1890,11 @@ function openSettings() {
 
 function closeSettings() { document.getElementById('settingsModal').classList.remove('active'); }
 
+function applyBrandColors() {
+  document.documentElement.style.setProperty('--primary', brand.primaryColor);
+  document.documentElement.style.setProperty('--secondary', brand.secondaryColor);
+}
+
 function saveSettings() {
   brand.orgName = document.getElementById('brandOrgName').value.trim() || 'UCHealth';
   brand.primaryColor = document.getElementById('brandPrimaryColor').value;
@@ -1905,6 +1910,7 @@ function saveSettings() {
     acronyms: document.getElementById('secAcronyms').checked,
   };
   localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
+  applyBrandColors();
   showToast('Brand settings saved', 'success');
   closeSettings();
 }
@@ -2827,6 +2833,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var savedBrand = localStorage.getItem(BRAND_KEY);
     if (savedBrand) brand = { ...brand, ...JSON.parse(savedBrand) };
   } catch (e) {}
+  applyBrandColors();
   showDashboard();
 });
 
