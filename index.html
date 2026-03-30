@@ -212,6 +212,7 @@ textarea { resize: vertical; min-height: 80px; }
 @media (max-width: 768px) {
   .sidebar { display: none; }
   .main-content { margin-left: 0; }
+  .dashboard-grid { grid-template-columns: 1fr !important; }
 }
 /* Edit participant modal */
 .participant-edit-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
@@ -231,6 +232,34 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
 .logo-preview { max-width: 200px; max-height: 80px; margin-top: 8px; border-radius: 6px; border: 1px solid var(--gray-300); }
 /* JSON import/export buttons in header */
 .json-btns { display: flex; gap: 4px; }
+/* Dashboard styles */
+.dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.dashboard-header h2 { font-size: 26px; font-weight: 700; color: var(--primary); }
+.dashboard-filters { display: flex; gap: 8px; margin-bottom: 24px; }
+.dashboard-filters button { padding: 8px 18px; border-radius: 8px; border: 2px solid var(--gray-300); background: var(--white); color: var(--gray-600); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.dashboard-filters button.active { border-color: var(--primary); background: var(--primary); color: var(--white); }
+.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+.aar-card { background: var(--white); border: 2px solid var(--gray-200); border-radius: 12px; padding: 24px; transition: all 0.2s; cursor: pointer; position: relative; }
+.aar-card:hover { border-color: var(--secondary); box-shadow: 0 4px 12px rgba(0,114,206,0.1); transform: translateY(-2px); }
+.aar-card-title { font-size: 16px; font-weight: 700; color: var(--primary); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aar-card-meta { font-size: 13px; color: var(--gray-500); margin-bottom: 4px; }
+.aar-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--gray-200); }
+.status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.status-badge.draft { background: #EBF4FF; color: var(--secondary); }
+.status-badge.completed { background: #C6F6D5; color: #22543D; }
+.aar-card-delete { background: none; border: none; color: var(--gray-400); cursor: pointer; font-size: 16px; padding: 4px 8px; border-radius: 4px; position: absolute; top: 12px; right: 12px; }
+.aar-card-delete:hover { background: #FED7D7; color: var(--red); }
+.empty-state { text-align: center; padding: 60px 20px; color: var(--gray-500); }
+.empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+/* Preview enhanced styles */
+.preview-cover { text-align: center; padding: 40px 24px; border-bottom: 3px solid var(--primary); margin-bottom: 20px; }
+.preview-cover .org-name { font-size: 16px; color: var(--primary); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+.preview-cover .event-title { font-size: 24px; color: var(--primary); font-weight: 700; margin: 16px 0 6px; }
+.preview-cover .subtitle { font-size: 16px; color: var(--secondary); margin-bottom: 16px; }
+.preview-cover .detail-line { font-size: 12px; color: var(--gray-600); margin: 3px 0; }
+.preview-cover .detail-label { font-weight: 700; color: var(--gray-500); }
+.preview-section-break { border: none; border-top: 1px dashed var(--gray-300); margin: 20px 0; }
+.preview-fouo { color: var(--red); font-weight: 700; border-top: 2px solid var(--red); border-bottom: 2px solid var(--red); padding: 6px 0; margin-top: 16px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -240,13 +269,12 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
   <h1>&#9670; AAR <span>Builder</span></h1>
   <div class="header-actions">
     <div class="autosave-indicator" id="autosaveIndicator">Auto-saved</div>
-    <select id="draftSelector" title="Load a saved draft">
-      <option value="">-- Saved Drafts --</option>
-    </select>
+    <button class="btn-header" onclick="showDashboard()">&#127968; Home</button>
     <button class="btn-header accent" onclick="saveDraft()">&#128190; Save Draft</button>
     <button class="btn-header" onclick="exportJSON()">&#8599; Export JSON</button>
     <button class="btn-header" onclick="document.getElementById('jsonImportInput').click()">&#8601; Import JSON</button>
     <input type="file" id="jsonImportInput" accept=".json" style="display:none" onchange="importJSON(event)">
+    <button class="gear-btn" onclick="openFeedback()" title="Feedback">&#128172;</button>
     <button class="gear-btn" onclick="openSettings()" title="Brand Settings">&#9881;</button>
   </div>
 </header>
@@ -256,7 +284,7 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
   <!-- Sidebar -->
   <nav class="sidebar">
     <ul class="sidebar-nav" id="sidebarNav">
-      <li class="active" data-step="1"><span class="step-num">1</span> Event Details</li>
+      <li data-step="1"><span class="step-num">1</span> Event Details</li>
       <li data-step="2"><span class="step-num">2</span> Participants</li>
       <li data-step="3"><span class="step-num">3</span> Reference Docs</li>
       <li data-step="4"><span class="step-num">4</span> AAR Content</li>
@@ -268,8 +296,24 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
   <!-- Main Content -->
   <main class="main-content">
 
+    <!-- Dashboard -->
+    <section class="step-panel active" id="dashboard">
+      <div class="dashboard-header">
+        <h2>Your After-Action Reports</h2>
+        <button class="btn btn-accent btn-lg" onclick="startNewAAR()">+ New AAR</button>
+      </div>
+      <div class="dashboard-filters">
+        <button class="active" data-filter="all" onclick="renderDashboard('all')">All</button>
+        <button data-filter="drafts" onclick="renderDashboard('drafts')">Drafts</button>
+        <button data-filter="completed" onclick="renderDashboard('completed')">Completed</button>
+      </div>
+      <div class="dashboard-grid" id="dashboardGrid">
+        <div class="empty-state"><div class="empty-state-icon">&#128203;</div><p>No AARs yet. Click "New AAR" to get started.</p></div>
+      </div>
+    </section>
+
     <!-- Step 1: Event Details -->
-    <section class="step-panel active" id="step1">
+    <section class="step-panel" id="step1">
       <h2 class="step-title">Event Details</h2>
       <p class="step-subtitle">Provide the basic information about the exercise or incident.</p>
 
@@ -398,7 +442,7 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('xlsxImportInput').click()">Import from XLSX</button>
           <input type="file" id="xlsxImportInput" accept=".xlsx" style="display:none" onchange="importParticipantsXLSX(event)">
         </div>
-        <p style="font-size:12px; color:var(--gray-500); margin-top:8px;">CSV/XLSX should have columns: Name, Title, Department, Email</p>
+        <p style="font-size:12px; color:var(--gray-500); margin-top:8px;">Upload a CSV or XLSX file. After upload, you'll map your columns to Name, Title, Department, and Email.</p>
       </div>
 
       <div class="step-nav">
@@ -597,7 +641,7 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
         <div class="generate-card" onclick="generateXLSX()">
           <div class="generate-card-icon">&#128202;</div>
           <h3>Action Tracker (XLSX)</h3>
-          <p>Excel workbook with action items and improvement plan tracking sheets.</p>
+          <p>Excel workbook with improvement plan tracking sheet.</p>
           <button class="btn btn-secondary">Generate XLSX</button>
         </div>
         <div class="generate-card" onclick="generateBoth()">
@@ -615,6 +659,21 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
         </div>
         <div class="btn-group">
           <button class="btn btn-outline btn-sm" onclick="refreshPreview()">&#8635; Refresh Preview</button>
+        </div>
+      </div>
+
+      <div id="completionPanel" style="display:none;">
+        <div class="form-card" style="background: #F0FFF4; border-color: var(--green);">
+          <div style="text-align:center; padding: 20px 0;">
+            <div style="font-size:48px; margin-bottom:12px;">&#9989;</div>
+            <h3 style="font-size:22px; color: var(--green); margin-bottom:8px;">AAR Generated Successfully</h3>
+            <p id="completionSummary" style="font-size:14px; color:var(--gray-600);"></p>
+          </div>
+          <div class="btn-group" style="justify-content:center;">
+            <button class="btn btn-primary" onclick="showDashboard()">&#127968; Dashboard</button>
+            <button class="btn btn-accent" onclick="startNewAAR()">+ New AAR</button>
+            <button class="btn btn-outline" id="markCompleteBtn" onclick="markComplete()">Mark as Complete</button>
+          </div>
         </div>
       </div>
 
@@ -656,6 +715,35 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
     <div class="form-group">
       <label for="brandDefaultDept">Default Department</label>
       <input type="text" id="brandDefaultDept" placeholder="e.g., Emergency Management">
+    </div>
+    <div class="form-card" style="margin-top:16px; padding:16px;">
+      <h3 style="font-size:14px; margin-bottom:12px;">Assessment Framework</h3>
+      <div class="form-group">
+        <select id="brandFramework">
+          <option value="fema">FEMA Core Capabilities</option>
+          <option value="jc">Joint Commission Critical Areas</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-card" style="margin-top:16px; padding:16px;">
+      <h3 style="font-size:14px; margin-bottom:12px;">Report Sections</h3>
+      <div style="display:grid; gap:8px;">
+        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="secTimeline" checked> Scenario Narrative / Timeline
+        </label>
+        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="secDecisions" checked> Key Decisions
+        </label>
+        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="secResourceGaps" checked> Resource Gaps
+        </label>
+        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="secCommIssues" checked> Communication Issues
+        </label>
+        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="secAcronyms" checked> Appendix C: Acronym List
+        </label>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeSettings()">Cancel</button>
@@ -736,6 +824,73 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
   </div>
 </div>
 
+<!-- Feedback Modal -->
+<div class="modal-overlay" id="feedbackModal">
+  <div class="modal">
+    <h2>&#128172; Send Feedback</h2>
+    <div class="form-group">
+      <label>Feedback Type</label>
+      <select id="feedbackType">
+        <option value="app">App Feedback (about this tool)</option>
+        <option value="process">Process Feedback (about the AAR process)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Category</label>
+      <select id="feedbackCategory">
+        <option value="general">General</option>
+        <option value="bug">Bug Report</option>
+        <option value="feature">Feature Request</option>
+        <option value="improvement">Improvement Suggestion</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Your Feedback</label>
+      <textarea id="feedbackText" rows="5" placeholder="Tell us what's on your mind..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeFeedback()">Cancel</button>
+      <button class="btn btn-secondary btn-sm" onclick="copyFeedback()">&#128203; Copy to Clipboard</button>
+      <button class="btn btn-primary btn-sm" onclick="emailFeedback()">&#9993; Send via Email</button>
+    </div>
+  </div>
+</div>
+
+<!-- Column Mapping Modal -->
+<div class="modal-overlay" id="columnMappingModal">
+  <div class="modal" style="max-width:700px;">
+    <h2>Map Import Columns</h2>
+    <p style="font-size:13px; color:var(--gray-600); margin-bottom:16px;">Map your file's columns to participant fields. We've auto-detected likely matches.</p>
+    <div style="overflow-x:auto; margin-bottom:20px;">
+      <table class="data-table" id="importPreviewTable"></table>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Name *</label>
+        <select id="mapName"><option value="-1">-- Skip --</option></select>
+      </div>
+      <div class="form-group">
+        <label>Title / Role</label>
+        <select id="mapTitle"><option value="-1">-- Skip --</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Department</label>
+        <select id="mapDept"><option value="-1">-- Skip --</option></select>
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <select id="mapEmail"><option value="-1">-- Skip --</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeColumnMapping()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="applyColumnMapping()">Import Participants</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -746,6 +901,9 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
 const APP_KEY = 'aar-builder-data';
 const BRAND_KEY = 'aar-builder-brand';
 const DRAFTS_KEY = 'aar-builder-drafts';
+const DRAFTS_KEY_V2 = 'aar-builder-drafts-v2';
+
+let currentDraftId = null;
 
 let state = {
   eventTitle: '', eventType: '', eventDateStart: '', eventDateEnd: '',
@@ -767,7 +925,9 @@ let brand = {
   primaryColor: '#003B71',
   secondaryColor: '#0072CE',
   fouo: false,
-  defaultDept: ''
+  defaultDept: '',
+  framework: 'fema',
+  sections: { timeline: true, decisions: true, resourceGaps: true, commIssues: true, acronyms: true }
 };
 
 let currentStep = 1;
@@ -790,6 +950,19 @@ const FEMA_CAPABILITIES = [
   'Situational Assessment', 'Logistics and Supply Chain Management',
   'Economic Recovery', 'Health and Social Services', 'Housing',
   'Natural and Cultural Resources', 'N/A'
+];
+
+// ========================================
+// JC CRITICAL AREAS
+// ========================================
+const JC_CRITICAL_AREAS = [
+  'Communication',
+  'Resources & Assets',
+  'Safety & Security',
+  'Roles & Responsibilities',
+  'Utilities Management',
+  'Patient Clinical & Support Activities',
+  'N/A'
 ];
 
 // ========================================
@@ -831,14 +1004,137 @@ const EM_ACRONYMS = [
 ];
 
 // ========================================
+// DEFAULT STATE FACTORY
+// ========================================
+function getDefaultState() {
+  return {
+    eventTitle: '', eventType: '', eventDateStart: '', eventDateEnd: '',
+    eventLocation: '', sponsorOrg: '', directorName: '', directorTitle: '',
+    overallAssessment: '',
+    participants: [],
+    uploadedFiles: [],
+    purpose: '', scope: '',
+    objectives: [],
+    strengths: [],
+    improvements: [],
+    scenarioNarrative: '', keyDecisions: '', resourceGaps: '', commIssues: '',
+    actionItems: [],
+  };
+}
+
+// ========================================
+// DASHBOARD
+// ========================================
+function showDashboard() {
+  document.querySelector('.sidebar').style.display = 'none';
+  document.querySelector('.main-content').style.marginLeft = '0';
+  document.querySelectorAll('.step-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('dashboard').classList.add('active');
+  renderDashboard();
+}
+
+function renderDashboard(filter) {
+  filter = filter || 'all';
+  // Update filter buttons
+  document.querySelectorAll('.dashboard-filters button').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.filter === filter);
+  });
+  var drafts = {};
+  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
+  var entries = Object.values(drafts);
+  if (filter === 'drafts') entries = entries.filter(function(d) { return d.meta.status === 'draft'; });
+  if (filter === 'completed') entries = entries.filter(function(d) { return d.meta.status === 'completed'; });
+  entries.sort(function(a, b) { return (b.meta.updatedAt || 0) - (a.meta.updatedAt || 0); });
+  var grid = document.getElementById('dashboardGrid');
+  if (entries.length === 0) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div><p>No AARs yet. Click "New AAR" to get started.</p></div>';
+    return;
+  }
+  grid.innerHTML = entries.map(function(d) {
+    var dateStr = d.meta.eventDate ? formatDate(d.meta.eventDate) : '';
+    var updated = d.meta.updatedAt ? new Date(d.meta.updatedAt).toLocaleDateString() : '';
+    return '<div class="aar-card" onclick="openDraft(\'' + d.meta.id + '\')">' +
+      '<button class="aar-card-delete" onclick="event.stopPropagation();deleteDraft(\'' + d.meta.id + '\')" title="Delete">&times;</button>' +
+      '<div class="aar-card-title">' + esc(d.meta.name || 'Untitled AAR') + '</div>' +
+      '<div class="aar-card-meta">' + esc(d.meta.eventType || 'No type') + (dateStr ? ' &middot; ' + dateStr : '') + '</div>' +
+      '<div class="aar-card-footer">' +
+        '<span class="status-badge ' + d.meta.status + '">' + (d.meta.status === 'completed' ? 'Completed' : 'Draft') + '</span>' +
+        '<span style="font-size:12px;color:var(--gray-500);">' + (updated ? 'Updated ' + updated : '') + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function openDraft(id) {
+  var drafts = {};
+  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
+  if (!drafts[id]) { showToast('Draft not found', 'error'); return; }
+  currentDraftId = id;
+  state = { ...getDefaultState(), ...drafts[id].state };
+  enterWizard();
+}
+
+function startNewAAR() {
+  currentDraftId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  state = getDefaultState();
+  var drafts = {};
+  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
+  drafts[currentDraftId] = {
+    meta: { id: currentDraftId, name: '', status: 'draft', createdAt: Date.now(), updatedAt: Date.now(), eventType: '', eventDate: '' },
+    state: JSON.parse(JSON.stringify(state))
+  };
+  localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(drafts));
+  enterWizard();
+}
+
+function enterWizard() {
+  document.querySelector('.sidebar').style.display = '';
+  document.querySelector('.main-content').style.marginLeft = '';
+  document.querySelectorAll('.step-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('step1').classList.add('active');
+  currentStep = 1;
+  populateFields();
+  updateStepCompleteness();
+  // Reset sidebar active
+  document.querySelectorAll('.sidebar-nav li').forEach(function(li) {
+    li.classList.remove('active');
+    if (parseInt(li.dataset.step) === 1) li.classList.add('active');
+  });
+  // Hide completion panel if showing
+  var cp = document.getElementById('completionPanel');
+  if (cp) cp.style.display = 'none';
+  window.scrollTo(0, 0);
+}
+
+function deleteDraft(id) {
+  if (!confirm('Delete this AAR? This cannot be undone.')) return;
+  var drafts = {};
+  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
+  delete drafts[id];
+  localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(drafts));
+  renderDashboard();
+  showToast('AAR deleted', 'success');
+}
+
+// ========================================
 // NAVIGATION
 // ========================================
 function goToStep(n) {
-  collectCurrentStepData();
+  // Don't collect if we're on dashboard (no form elements)
+  if (document.getElementById('step1').classList.contains('active') ||
+      document.getElementById('step2').classList.contains('active') ||
+      document.getElementById('step3').classList.contains('active') ||
+      document.getElementById('step4').classList.contains('active') ||
+      document.getElementById('step5').classList.contains('active') ||
+      document.getElementById('step6').classList.contains('active')) {
+    collectCurrentStepData();
+  }
   currentStep = n;
-  document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.step-panel').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById('step' + n).classList.add('active');
-  document.querySelectorAll('.sidebar-nav li').forEach(li => {
+  document.querySelector('.sidebar').style.display = '';
+  document.querySelector('.main-content').style.marginLeft = '';
+  document.querySelectorAll('.sidebar-nav li').forEach(function(li) {
     li.classList.remove('active');
     if (parseInt(li.dataset.step) === n) li.classList.add('active');
   });
@@ -850,12 +1146,12 @@ function goToStep(n) {
   window.scrollTo(0, 0);
 }
 
-document.querySelectorAll('.sidebar-nav li').forEach(li => {
-  li.addEventListener('click', () => goToStep(parseInt(li.dataset.step)));
+document.querySelectorAll('.sidebar-nav li').forEach(function(li) {
+  li.addEventListener('click', function() { goToStep(parseInt(li.dataset.step)); });
 });
 
 function updateStepCompleteness() {
-  const nav = document.querySelectorAll('.sidebar-nav li');
+  var nav = document.querySelectorAll('.sidebar-nav li');
   // Step 1 complete if title + type filled
   if (state.eventTitle && state.eventType) nav[0].classList.add('completed'); else nav[0].classList.remove('completed');
   // Step 2 complete if at least 1 participant
@@ -873,21 +1169,22 @@ function updateStepCompleteness() {
 // ========================================
 function collectCurrentStepData() {
   // Always collect all steps — fields persist
-  state.eventTitle = document.getElementById('eventTitle').value;
-  state.eventType = document.getElementById('eventType').value;
-  state.eventDateStart = document.getElementById('eventDateStart').value;
-  state.eventDateEnd = document.getElementById('eventDateEnd').value;
-  state.eventLocation = document.getElementById('eventLocation').value;
-  state.sponsorOrg = document.getElementById('sponsorOrg').value;
-  state.directorName = document.getElementById('directorName').value;
-  state.directorTitle = document.getElementById('directorTitle').value;
-  state.overallAssessment = document.getElementById('overallAssessment').value;
-  state.purpose = document.getElementById('purpose').value;
-  state.scope = document.getElementById('scope').value;
-  state.scenarioNarrative = document.getElementById('scenarioNarrative').value;
-  state.keyDecisions = document.getElementById('keyDecisions').value;
-  state.resourceGaps = document.getElementById('resourceGaps').value;
-  state.commIssues = document.getElementById('commIssues').value;
+  var el;
+  el = document.getElementById('eventTitle'); if (el) state.eventTitle = el.value;
+  el = document.getElementById('eventType'); if (el) state.eventType = el.value;
+  el = document.getElementById('eventDateStart'); if (el) state.eventDateStart = el.value;
+  el = document.getElementById('eventDateEnd'); if (el) state.eventDateEnd = el.value;
+  el = document.getElementById('eventLocation'); if (el) state.eventLocation = el.value;
+  el = document.getElementById('sponsorOrg'); if (el) state.sponsorOrg = el.value;
+  el = document.getElementById('directorName'); if (el) state.directorName = el.value;
+  el = document.getElementById('directorTitle'); if (el) state.directorTitle = el.value;
+  el = document.getElementById('overallAssessment'); if (el) state.overallAssessment = el.value;
+  el = document.getElementById('purpose'); if (el) state.purpose = el.value;
+  el = document.getElementById('scope'); if (el) state.scope = el.value;
+  el = document.getElementById('scenarioNarrative'); if (el) state.scenarioNarrative = el.value;
+  el = document.getElementById('keyDecisions'); if (el) state.keyDecisions = el.value;
+  el = document.getElementById('resourceGaps'); if (el) state.resourceGaps = el.value;
+  el = document.getElementById('commIssues'); if (el) state.commIssues = el.value;
   collectObjectives();
   collectStrengths();
   collectImprovements();
@@ -921,10 +1218,10 @@ function populateFields() {
 // PARTICIPANTS
 // ========================================
 function addParticipant(name, title, dept, email) {
-  const n = name || document.getElementById('pName').value.trim();
-  const t = title || document.getElementById('pTitle').value.trim();
-  const d = dept || document.getElementById('pDept').value.trim();
-  const e = email || document.getElementById('pEmail').value.trim();
+  var n = name || document.getElementById('pName').value.trim();
+  var t = title || document.getElementById('pTitle').value.trim();
+  var d = dept || document.getElementById('pDept').value.trim();
+  var e = email || document.getElementById('pEmail').value.trim();
   if (!n) { showToast('Name is required', 'error'); return; }
   state.participants.push({ name: n, title: t, department: d, email: e });
   if (!name) { // only clear if from form
@@ -938,8 +1235,8 @@ function addParticipant(name, title, dept, email) {
 }
 
 function renderParticipants() {
-  const tbody = document.getElementById('participantTableBody');
-  const msg = document.getElementById('noParticipantsMsg');
+  var tbody = document.getElementById('participantTableBody');
+  var msg = document.getElementById('noParticipantsMsg');
   tbody.innerHTML = '';
   if (state.participants.length === 0) {
     msg.style.display = 'block';
@@ -948,13 +1245,13 @@ function renderParticipants() {
   }
   msg.style.display = 'none';
   document.getElementById('participantCount').textContent = state.participants.length;
-  state.participants.forEach((p, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i + 1}</td><td>${esc(p.name)}</td><td>${esc(p.title)}</td><td>${esc(p.department)}</td><td>${esc(p.email)}</td>
-      <td class="table-actions">
-        <button class="edit-btn" onclick="openEditParticipant(${i})">Edit</button>
-        <button class="delete-btn" onclick="deleteParticipant(${i})">Delete</button>
-      </td>`;
+  state.participants.forEach(function(p, i) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + esc(p.name) + '</td><td>' + esc(p.title) + '</td><td>' + esc(p.department) + '</td><td>' + esc(p.email) + '</td>' +
+      '<td class="table-actions">' +
+        '<button class="edit-btn" onclick="openEditParticipant(' + i + ')">Edit</button>' +
+        '<button class="delete-btn" onclick="deleteParticipant(' + i + ')">Delete</button>' +
+      '</td>';
     tbody.appendChild(tr);
   });
 }
@@ -966,7 +1263,7 @@ function deleteParticipant(i) {
 }
 
 function openEditParticipant(i) {
-  const p = state.participants[i];
+  var p = state.participants[i];
   document.getElementById('editPIndex').value = i;
   document.getElementById('editPName').value = p.name;
   document.getElementById('editPTitle').value = p.title;
@@ -978,7 +1275,7 @@ function openEditParticipant(i) {
 function closeEditParticipant() { document.getElementById('editParticipantModal').classList.remove('active'); }
 
 function saveEditParticipant() {
-  const i = parseInt(document.getElementById('editPIndex').value);
+  var i = parseInt(document.getElementById('editPIndex').value);
   state.participants[i] = {
     name: document.getElementById('editPName').value.trim(),
     title: document.getElementById('editPTitle').value.trim(),
@@ -990,25 +1287,30 @@ function saveEditParticipant() {
   autoSave();
 }
 
+// ========================================
+// FLEXIBLE PARTICIPANT IMPORT
+// ========================================
+var pendingImportData = null; // { headers: string[], rows: string[][] }
+
 function importParticipantsCSV(event) {
-  const file = event.target.files[0];
+  var file = event.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
+  var reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const lines = e.target.result.split('\n').filter(l => l.trim());
-      let startIdx = 0;
-      const header = lines[0].toLowerCase();
-      if (header.includes('name') || header.includes('title') || header.includes('department')) startIdx = 1;
-      let count = 0;
-      for (let i = startIdx; i < lines.length; i++) {
-        const cols = parseCSVLine(lines[i]);
-        if (cols[0] && cols[0].trim()) {
-          addParticipant(cols[0]?.trim() || '', cols[1]?.trim() || '', cols[2]?.trim() || '', cols[3]?.trim() || '');
-          count++;
-        }
+      var lines = e.target.result.split('\n').filter(function(l) { return l.trim(); });
+      if (lines.length === 0) { showToast('Empty CSV file', 'error'); return; }
+      var firstLine = parseCSVLine(lines[0]);
+      // Detect if first row is header
+      var isHeader = firstLine.some(function(c) { return /^[a-zA-Z\s\/]+$/.test(c.trim()) && c.trim().length > 1; });
+      var headers = isHeader ? firstLine.map(function(c) { return c.trim(); }) : firstLine.map(function(_, i) { return 'Column ' + (i + 1); });
+      var dataStart = isHeader ? 1 : 0;
+      var rows = [];
+      for (var i = dataStart; i < lines.length; i++) {
+        var cols = parseCSVLine(lines[i]);
+        if (cols.some(function(c) { return c.trim(); })) rows.push(cols.map(function(c) { return c.trim(); }));
       }
-      showToast(`Imported ${count} participants`, 'success');
+      openColumnMapping(headers, rows);
     } catch (err) {
       showToast('Failed to parse CSV: ' + err.message, 'error');
     }
@@ -1018,11 +1320,11 @@ function importParticipantsCSV(event) {
 }
 
 function parseCSVLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
+  var result = [];
+  var current = '';
+  var inQuotes = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
     if (ch === '"') { inQuotes = !inQuotes; }
     else if (ch === ',' && !inQuotes) { result.push(current); current = ''; }
     else { current += ch; }
@@ -1032,26 +1334,19 @@ function parseCSVLine(line) {
 }
 
 function importParticipantsXLSX(event) {
-  const file = event.target.files[0];
+  var file = event.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
+  var reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
-      let count = 0;
-      data.forEach(row => {
-        const name = row['Name'] || row['name'] || row['NAME'] || Object.values(row)[0] || '';
-        const title = row['Title'] || row['title'] || row['Role'] || row['role'] || Object.values(row)[1] || '';
-        const dept = row['Department'] || row['department'] || row['Dept'] || Object.values(row)[2] || '';
-        const email = row['Email'] || row['email'] || Object.values(row)[3] || '';
-        if (name.toString().trim()) {
-          addParticipant(name.toString().trim(), title.toString().trim(), dept.toString().trim(), email.toString().trim());
-          count++;
-        }
-      });
-      showToast(`Imported ${count} participants`, 'success');
+      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rawData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (rawData.length === 0) { showToast('Empty spreadsheet', 'error'); return; }
+      var headers = rawData[0].map(function(h) { return String(h).trim(); });
+      var rows = rawData.slice(1).filter(function(r) { return r.some(function(c) { return String(c).trim(); }); });
+      var strRows = rows.map(function(r) { return r.map(function(c) { return String(c).trim(); }); });
+      openColumnMapping(headers, strRows);
     } catch (err) {
       showToast('Failed to parse XLSX: ' + err.message, 'error');
     }
@@ -1060,30 +1355,97 @@ function importParticipantsXLSX(event) {
   reader.readAsArrayBuffer(file);
 }
 
+function openColumnMapping(headers, rows) {
+  pendingImportData = { headers: headers, rows: rows };
+  // Build preview table (first 3 rows)
+  var preview = document.getElementById('importPreviewTable');
+  var html = '<thead><tr>' + headers.map(function(h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
+  rows.slice(0, 3).forEach(function(row) {
+    html += '<tr>' + headers.map(function(_, i) { return '<td>' + esc(row[i] || '') + '</td>'; }).join('') + '</tr>';
+  });
+  html += '</tbody>';
+  preview.innerHTML = html;
+
+  // Populate mapping dropdowns
+  var fields = ['mapName', 'mapTitle', 'mapDept', 'mapEmail'];
+  var matchers = {
+    mapName: ['name', 'full name', 'participant', 'attendee'],
+    mapTitle: ['title', 'role', 'position', 'job title', 'job'],
+    mapDept: ['department', 'dept', 'organization', 'org', 'unit', 'division'],
+    mapEmail: ['email', 'e-mail', 'email address', 'mail']
+  };
+
+  fields.forEach(function(field) {
+    var sel = document.getElementById(field);
+    sel.innerHTML = '<option value="-1">-- Skip --</option>';
+    headers.forEach(function(h, i) {
+      var opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = h;
+      sel.appendChild(opt);
+    });
+    // Auto-detect
+    var match = matchers[field];
+    var idx = headers.findIndex(function(h) { return match.some(function(m) { return h.toLowerCase().includes(m); }); });
+    if (idx >= 0) sel.value = idx;
+  });
+
+  document.getElementById('columnMappingModal').classList.add('active');
+}
+
+function closeColumnMapping() {
+  document.getElementById('columnMappingModal').classList.remove('active');
+  pendingImportData = null;
+}
+
+function applyColumnMapping() {
+  if (!pendingImportData) return;
+  var nameIdx = parseInt(document.getElementById('mapName').value);
+  var titleIdx = parseInt(document.getElementById('mapTitle').value);
+  var deptIdx = parseInt(document.getElementById('mapDept').value);
+  var emailIdx = parseInt(document.getElementById('mapEmail').value);
+
+  if (nameIdx < 0) { showToast('Name column is required', 'error'); return; }
+
+  var count = 0;
+  pendingImportData.rows.forEach(function(row) {
+    var name = (row[nameIdx] || '').trim();
+    if (!name) return;
+    var title = titleIdx >= 0 ? (row[titleIdx] || '').trim() : '';
+    var dept = deptIdx >= 0 ? (row[deptIdx] || '').trim() : '';
+    var email = emailIdx >= 0 ? (row[emailIdx] || '').trim() : '';
+    addParticipant(name, title, dept, email);
+    count++;
+  });
+
+  closeColumnMapping();
+  showToast('Imported ' + count + ' participants', 'success');
+}
+
 // ========================================
 // FILE UPLOAD & TEXT EXTRACTION
 // ========================================
-const uploadZone = document.getElementById('uploadZone');
-const fileInput = document.getElementById('fileInput');
+var uploadZone = document.getElementById('uploadZone');
+var fileInput = document.getElementById('fileInput');
 
-uploadZone.addEventListener('click', () => fileInput.click());
-uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
-uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-uploadZone.addEventListener('drop', e => {
+uploadZone.addEventListener('click', function() { fileInput.click(); });
+uploadZone.addEventListener('dragover', function(e) { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', function() { uploadZone.classList.remove('dragover'); });
+uploadZone.addEventListener('drop', function(e) {
   e.preventDefault();
   uploadZone.classList.remove('dragover');
   handleFiles(e.dataTransfer.files);
 });
-fileInput.addEventListener('change', e => handleFiles(e.target.files));
+fileInput.addEventListener('change', function(e) { handleFiles(e.target.files); });
 
 function handleFiles(files) {
-  Array.from(files).forEach(file => {
-    const ext = file.name.split('.').pop().toLowerCase();
+  Array.from(files).forEach(function(file) {
+    var ext = file.name.split('.').pop().toLowerCase();
     if (!['docx', 'pptx', 'xlsx'].includes(ext)) {
-      showToast(`Unsupported file type: .${ext}`, 'error');
+      showToast('Unsupported file type: .' + ext, 'error');
       return;
     }
-    const entry = { name: file.name, type: ext, size: formatFileSize(file.size), text: '', useAsRef: true, extracting: true };
+    var entry = { name: file.name, type: ext, size: formatFileSize(file.size), text: '', useAsRef: true, extracting: true };
     state.uploadedFiles.push(entry);
     renderUploadedFiles();
     extractText(file, ext, state.uploadedFiles.length - 1);
@@ -1093,27 +1455,27 @@ function handleFiles(files) {
 
 async function extractText(file, ext, idx) {
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    let text = '';
+    var arrayBuffer = await file.arrayBuffer();
+    var text = '';
     if (ext === 'docx') {
-      const result = await mammoth.extractRawText({ arrayBuffer });
+      var result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
       text = result.value;
     } else if (ext === 'xlsx') {
-      const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
-      wb.SheetNames.forEach(name => {
-        const ws = wb.Sheets[name];
-        text += `--- Sheet: ${name} ---\n`;
+      var wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+      wb.SheetNames.forEach(function(name) {
+        var ws = wb.Sheets[name];
+        text += '--- Sheet: ' + name + ' ---\n';
         text += XLSX.utils.sheet_to_csv(ws) + '\n\n';
       });
     } else if (ext === 'pptx') {
-      const zip = await JSZip.loadAsync(arrayBuffer);
-      const slideFiles = Object.keys(zip.files).filter(f => /^ppt\/slides\/slide\d+\.xml$/i.test(f)).sort();
-      for (const sf of slideFiles) {
-        const slideNum = sf.match(/slide(\d+)/)[1];
-        const xml = await zip.files[sf].async('text');
-        const slideText = extractTextFromXML(xml);
+      var zip = await JSZip.loadAsync(arrayBuffer);
+      var slideFiles = Object.keys(zip.files).filter(function(f) { return /^ppt\/slides\/slide\d+\.xml$/i.test(f); }).sort();
+      for (var sf of slideFiles) {
+        var slideNum = sf.match(/slide(\d+)/)[1];
+        var xml = await zip.files[sf].async('text');
+        var slideText = extractTextFromXML(xml);
         if (slideText.trim()) {
-          text += `--- Slide ${slideNum} ---\n${slideText}\n\n`;
+          text += '--- Slide ' + slideNum + ' ---\n' + slideText + '\n\n';
         }
       }
     }
@@ -1130,37 +1492,37 @@ async function extractText(file, ext, idx) {
 }
 
 function extractTextFromXML(xml) {
-  const texts = [];
-  const regex = /<a:t>([\s\S]*?)<\/a:t>/g;
-  let match;
+  var texts = [];
+  var regex = /<a:t>([\s\S]*?)<\/a:t>/g;
+  var match;
   while ((match = regex.exec(xml)) !== null) {
-    const decoded = match[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+    var decoded = match[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
     texts.push(decoded);
   }
   return texts.join(' ');
 }
 
 function renderUploadedFiles() {
-  const container = document.getElementById('fileList');
+  var container = document.getElementById('fileList');
   if (state.uploadedFiles.length === 0) { container.innerHTML = ''; return; }
-  container.innerHTML = state.uploadedFiles.map((f, i) => `
-    <div class="file-item">
-      <div class="file-icon ${f.type}">${f.type.toUpperCase()}</div>
-      <div class="file-info">
-        <div class="file-name">${esc(f.name)}</div>
-        <div class="file-meta">${f.size} ${f.extracting ? '— Extracting text...' : ''}</div>
-      </div>
-      <div class="file-actions">
-        <button class="preview-toggle" onclick="toggleFilePreview(${i})">${f.extracting ? '...' : 'Preview'}</button>
-        <label class="toggle-switch" title="Use as reference">
-          <input type="checkbox" ${f.useAsRef ? 'checked' : ''} onchange="toggleFileRef(${i}, this.checked)">
-          <span class="toggle-slider"></span>
-        </label>
-        <button class="remove-item" onclick="removeFile(${i})" title="Remove">&times;</button>
-      </div>
-    </div>
-    <div class="file-preview" id="filePreview${i}">${esc(f.text || '')}</div>
-  `).join('');
+  container.innerHTML = state.uploadedFiles.map(function(f, i) {
+    return '<div class="file-item">' +
+      '<div class="file-icon ' + f.type + '">' + f.type.toUpperCase() + '</div>' +
+      '<div class="file-info">' +
+        '<div class="file-name">' + esc(f.name) + '</div>' +
+        '<div class="file-meta">' + f.size + (f.extracting ? ' — Extracting text...' : '') + '</div>' +
+      '</div>' +
+      '<div class="file-actions">' +
+        '<button class="preview-toggle" onclick="toggleFilePreview(' + i + ')">' + (f.extracting ? '...' : 'Preview') + '</button>' +
+        '<label class="toggle-switch" title="Use as reference">' +
+          '<input type="checkbox" ' + (f.useAsRef ? 'checked' : '') + ' onchange="toggleFileRef(' + i + ', this.checked)">' +
+          '<span class="toggle-slider"></span>' +
+        '</label>' +
+        '<button class="remove-item" onclick="removeFile(' + i + ')" title="Remove">&times;</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="file-preview" id="filePreview' + i + '">' + esc(f.text || '') + '</div>';
+  }).join('');
 }
 
 function toggleFilePreview(i) {
@@ -1188,85 +1550,90 @@ function formatFileSize(bytes) {
 // REFERENCE PANEL
 // ========================================
 function updateReferencePanel() {
-  const container = document.getElementById('referencePanelContent');
-  const refs = state.uploadedFiles.filter(f => f.useAsRef && f.text);
+  var container = document.getElementById('referencePanelContent');
+  var refs = state.uploadedFiles.filter(function(f) { return f.useAsRef && f.text; });
   if (refs.length === 0) {
     container.innerHTML = '<p style="font-size:13px; color:var(--gray-500);">No reference documents available. Upload files in Step 3 and mark them as references.</p>';
     return;
   }
-  container.innerHTML = refs.map((f, i) => `
-    <div class="ref-doc">
-      <div class="ref-doc-title" onclick="this.nextElementSibling.classList.toggle('open')">
-        ${esc(f.name)} <span style="font-size:11px;">&#9660;</span>
-      </div>
-      <div class="ref-doc-content">${esc(f.text)}</div>
-    </div>
-  `).join('');
+  container.innerHTML = refs.map(function(f, i) {
+    return '<div class="ref-doc">' +
+      '<div class="ref-doc-title" onclick="this.nextElementSibling.classList.toggle(\'open\')">' +
+        esc(f.name) + ' <span style="font-size:11px;">&#9660;</span>' +
+      '</div>' +
+      '<div class="ref-doc-content">' + esc(f.text) + '</div>' +
+    '</div>';
+  }).join('');
 }
 
 // ========================================
 // OBJECTIVES
 // ========================================
 function buildCapabilityOptions(selected) {
-  return '<option value="">Select core capability...</option>' +
-    FEMA_CAPABILITIES.map(c => `<option value="${esc(c)}" ${selected === c ? 'selected' : ''}>${esc(c)}</option>`).join('');
+  var list = brand.framework === 'jc' ? JC_CRITICAL_AREAS : FEMA_CAPABILITIES;
+  var placeholder = brand.framework === 'jc' ? 'Select JC critical area...' : 'Select core capability...';
+  return '<option value="">' + placeholder + '</option>' +
+    list.map(function(c) { return '<option value="' + esc(c) + '" ' + (selected === c ? 'selected' : '') + '>' + esc(c) + '</option>'; }).join('');
 }
 
 function addObjective(data) {
-  const obj = data || { description: '', coreCapability: '', rating: '', analysis: '' };
+  var obj = data || { description: '', coreCapability: '', rating: '', analysis: '' };
   state.objectives.push(obj);
   renderObjectives();
 }
 
 function renderObjectives() {
-  const container = document.getElementById('objectivesContainer');
+  var container = document.getElementById('objectivesContainer');
   if (state.objectives.length === 0) {
     container.innerHTML = '<p style="font-size:13px; color:var(--gray-500); padding:12px;">No objectives added. Click "Add Objective" to begin.</p>';
     return;
   }
-  container.innerHTML = state.objectives.map((obj, i) => {
-    const uid = 'obj_' + i;
-    return `
-    <div class="dynamic-item" data-obj-index="${i}">
-      <div class="item-header">
-        <h4>Objective ${i + 1}</h4>
-        <button class="remove-item" onclick="removeObjective(${i})" title="Remove">&times;</button>
-      </div>
-      <div class="form-group">
-        <label>Objective Description</label>
-        <textarea class="obj-description" rows="3" placeholder="Describe the objective being tested...">${esc(obj.description)}</textarea>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>FEMA Core Capability</label>
-          <select class="obj-capability">${buildCapabilityOptions(obj.coreCapability)}</select>
-        </div>
-        <div class="form-group">
-          <label>Performance Rating</label>
-          <div class="rating-group">
-            <label class="rating-option"><input type="radio" name="rating_${uid}" value="P" ${obj.rating === 'P' ? 'checked' : ''}><span class="rating-badge rate-p">P — No Challenges</span></label>
-            <label class="rating-option"><input type="radio" name="rating_${uid}" value="S" ${obj.rating === 'S' ? 'checked' : ''}><span class="rating-badge rate-s">S — Some Challenges</span></label>
-            <label class="rating-option"><input type="radio" name="rating_${uid}" value="M" ${obj.rating === 'M' ? 'checked' : ''}><span class="rating-badge rate-m">M — Major Challenges</span></label>
-            <label class="rating-option"><input type="radio" name="rating_${uid}" value="U" ${obj.rating === 'U' ? 'checked' : ''}><span class="rating-badge rate-u">U — Unable to Perform</span></label>
-          </div>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Analysis / Observations</label>
-        <textarea class="obj-analysis" rows="3" placeholder="What happened? Key observations...">${esc(obj.analysis)}</textarea>
-      </div>
-    </div>`;
+  var capLabel = brand.framework === 'jc' ? 'JC Critical Area' : 'FEMA Core Capability';
+  container.innerHTML = state.objectives.map(function(obj, i) {
+    var uid = 'obj_' + i;
+    return '<div class="dynamic-item" data-obj-index="' + i + '">' +
+      '<div class="item-header">' +
+        '<h4>Objective ' + (i + 1) + '</h4>' +
+        '<button class="remove-item" onclick="removeObjective(' + i + ')" title="Remove">&times;</button>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Objective Description</label>' +
+        '<textarea class="obj-description" rows="3" placeholder="Describe the objective being tested...">' + esc(obj.description) + '</textarea>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group">' +
+          '<label>' + capLabel + '</label>' +
+          '<select class="obj-capability">' + buildCapabilityOptions(obj.coreCapability) + '</select>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label>Performance Rating</label>' +
+          '<div class="rating-group">' +
+            '<label class="rating-option"><input type="radio" name="rating_' + uid + '" value="P" ' + (obj.rating === 'P' ? 'checked' : '') + '><span class="rating-badge rate-p">P — No Challenges</span></label>' +
+            '<label class="rating-option"><input type="radio" name="rating_' + uid + '" value="S" ' + (obj.rating === 'S' ? 'checked' : '') + '><span class="rating-badge rate-s">S — Some Challenges</span></label>' +
+            '<label class="rating-option"><input type="radio" name="rating_' + uid + '" value="M" ' + (obj.rating === 'M' ? 'checked' : '') + '><span class="rating-badge rate-m">M — Major Challenges</span></label>' +
+            '<label class="rating-option"><input type="radio" name="rating_' + uid + '" value="U" ' + (obj.rating === 'U' ? 'checked' : '') + '><span class="rating-badge rate-u">U — Unable to Perform</span></label>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Analysis / Observations</label>' +
+        '<textarea class="obj-analysis" rows="3" placeholder="What happened? Key observations...">' + esc(obj.analysis) + '</textarea>' +
+      '</div>' +
+    '</div>';
   }).join('');
 }
 
 function collectObjectives() {
-  const items = document.querySelectorAll('#objectivesContainer .dynamic-item');
-  state.objectives = Array.from(items).map((el, i) => ({
-    description: el.querySelector('.obj-description').value,
-    coreCapability: el.querySelector('.obj-capability').value,
-    rating: el.querySelector(`input[name="rating_obj_${i}"]:checked`)?.value || '',
-    analysis: el.querySelector('.obj-analysis').value,
-  }));
+  var items = document.querySelectorAll('#objectivesContainer .dynamic-item');
+  state.objectives = Array.from(items).map(function(el, i) {
+    var checkedRadio = el.querySelector('input[name="rating_obj_' + i + '"]:checked');
+    return {
+      description: el.querySelector('.obj-description').value,
+      coreCapability: el.querySelector('.obj-capability').value,
+      rating: checkedRadio ? checkedRadio.value : '',
+      analysis: el.querySelector('.obj-analysis').value,
+    };
+  });
 }
 
 function removeObjective(i) {
@@ -1281,49 +1648,51 @@ function removeObjective(i) {
 // ========================================
 function buildObjectiveOptions(selected) {
   return '<option value="">N/A</option>' +
-    state.objectives.map((o, i) => {
-      const label = o.description ? o.description.substring(0, 60) + (o.description.length > 60 ? '...' : '') : `Objective ${i + 1}`;
-      return `<option value="${i}" ${selected == i ? 'selected' : ''}>${esc('Obj ' + (i+1) + ': ' + label)}</option>`;
+    state.objectives.map(function(o, i) {
+      var label = o.description ? o.description.substring(0, 60) + (o.description.length > 60 ? '...' : '') : 'Objective ' + (i + 1);
+      return '<option value="' + i + '" ' + (selected == i ? 'selected' : '') + '>' + esc('Obj ' + (i+1) + ': ' + label) + '</option>';
     }).join('');
 }
 
 function addStrength(data) {
   collectObjectives();
-  const s = data || { description: '', relatedObjective: '' };
+  var s = data || { description: '', relatedObjective: '' };
   state.strengths.push(s);
   renderStrengths();
 }
 
 function renderStrengths() {
-  const container = document.getElementById('strengthsContainer');
+  var container = document.getElementById('strengthsContainer');
   if (state.strengths.length === 0) {
     container.innerHTML = '<p style="font-size:13px; color:var(--gray-500); padding:12px;">No strengths added yet.</p>';
     return;
   }
-  container.innerHTML = state.strengths.map((s, i) => `
-    <div class="dynamic-item" data-str-index="${i}">
-      <div class="item-header">
-        <h4>Strength ${i + 1}</h4>
-        <button class="remove-item" onclick="removeStrength(${i})" title="Remove">&times;</button>
-      </div>
-      <div class="form-group">
-        <label>Description</label>
-        <textarea class="str-description" rows="3" placeholder="Describe what went well...">${esc(s.description)}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Related Objective</label>
-        <select class="str-objective">${buildObjectiveOptions(s.relatedObjective)}</select>
-      </div>
-    </div>
-  `).join('');
+  container.innerHTML = state.strengths.map(function(s, i) {
+    return '<div class="dynamic-item" data-str-index="' + i + '">' +
+      '<div class="item-header">' +
+        '<h4>Strength ' + (i + 1) + '</h4>' +
+        '<button class="remove-item" onclick="removeStrength(' + i + ')" title="Remove">&times;</button>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Description</label>' +
+        '<textarea class="str-description" rows="3" placeholder="Describe what went well...">' + esc(s.description) + '</textarea>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Related Objective</label>' +
+        '<select class="str-objective">' + buildObjectiveOptions(s.relatedObjective) + '</select>' +
+      '</div>' +
+    '</div>';
+  }).join('');
 }
 
 function collectStrengths() {
-  const items = document.querySelectorAll('#strengthsContainer .dynamic-item');
-  state.strengths = Array.from(items).map(el => ({
-    description: el.querySelector('.str-description').value,
-    relatedObjective: el.querySelector('.str-objective').value,
-  }));
+  var items = document.querySelectorAll('#strengthsContainer .dynamic-item');
+  state.strengths = Array.from(items).map(function(el) {
+    return {
+      description: el.querySelector('.str-description').value,
+      relatedObjective: el.querySelector('.str-objective').value,
+    };
+  });
 }
 
 function removeStrength(i) {
@@ -1338,58 +1707,60 @@ function removeStrength(i) {
 // ========================================
 function addImprovement(data) {
   collectObjectives();
-  const imp = data || { area: '', relatedObjective: '', recommendation: '', responsibleParty: '', targetDate: '' };
+  var imp = data || { area: '', relatedObjective: '', recommendation: '', responsibleParty: '', targetDate: '' };
   state.improvements.push(imp);
   renderImprovements();
 }
 
 function renderImprovements() {
-  const container = document.getElementById('improvementsContainer');
+  var container = document.getElementById('improvementsContainer');
   if (state.improvements.length === 0) {
     container.innerHTML = '<p style="font-size:13px; color:var(--gray-500); padding:12px;">No areas for improvement added yet.</p>';
     return;
   }
-  container.innerHTML = state.improvements.map((imp, i) => `
-    <div class="dynamic-item" data-imp-index="${i}">
-      <div class="item-header">
-        <h4>Area ${i + 1}</h4>
-        <button class="remove-item" onclick="removeImprovement(${i})" title="Remove">&times;</button>
-      </div>
-      <div class="form-group">
-        <label>Area Description</label>
-        <textarea class="imp-area" rows="3" placeholder="Describe the area needing improvement...">${esc(imp.area)}</textarea>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Related Objective</label>
-          <select class="imp-objective">${buildObjectiveOptions(imp.relatedObjective)}</select>
-        </div>
-        <div class="form-group">
-          <label>Responsible Party</label>
-          <input type="text" class="imp-responsible" value="${esc(imp.responsibleParty)}" placeholder="Who is responsible?">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Recommendation</label>
-        <textarea class="imp-recommendation" rows="3" placeholder="What should be done to address this?">${esc(imp.recommendation)}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Target Completion Date</label>
-        <input type="date" class="imp-target-date" value="${imp.targetDate || ''}">
-      </div>
-    </div>
-  `).join('');
+  container.innerHTML = state.improvements.map(function(imp, i) {
+    return '<div class="dynamic-item" data-imp-index="' + i + '">' +
+      '<div class="item-header">' +
+        '<h4>Area ' + (i + 1) + '</h4>' +
+        '<button class="remove-item" onclick="removeImprovement(' + i + ')" title="Remove">&times;</button>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Area Description</label>' +
+        '<textarea class="imp-area" rows="3" placeholder="Describe the area needing improvement...">' + esc(imp.area) + '</textarea>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group">' +
+          '<label>Related Objective</label>' +
+          '<select class="imp-objective">' + buildObjectiveOptions(imp.relatedObjective) + '</select>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label>Responsible Party</label>' +
+          '<input type="text" class="imp-responsible" value="' + esc(imp.responsibleParty) + '" placeholder="Who is responsible?">' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Recommendation</label>' +
+        '<textarea class="imp-recommendation" rows="3" placeholder="What should be done to address this?">' + esc(imp.recommendation) + '</textarea>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Target Completion Date</label>' +
+        '<input type="date" class="imp-target-date" value="' + (imp.targetDate || '') + '">' +
+      '</div>' +
+    '</div>';
+  }).join('');
 }
 
 function collectImprovements() {
-  const items = document.querySelectorAll('#improvementsContainer .dynamic-item');
-  state.improvements = Array.from(items).map(el => ({
-    area: el.querySelector('.imp-area').value,
-    relatedObjective: el.querySelector('.imp-objective').value,
-    recommendation: el.querySelector('.imp-recommendation').value,
-    responsibleParty: el.querySelector('.imp-responsible').value,
-    targetDate: el.querySelector('.imp-target-date').value,
-  }));
+  var items = document.querySelectorAll('#improvementsContainer .dynamic-item');
+  state.improvements = Array.from(items).map(function(el) {
+    return {
+      area: el.querySelector('.imp-area').value,
+      relatedObjective: el.querySelector('.imp-objective').value,
+      recommendation: el.querySelector('.imp-recommendation').value,
+      responsibleParty: el.querySelector('.imp-responsible').value,
+      targetDate: el.querySelector('.imp-target-date').value,
+    };
+  });
 }
 
 function removeImprovement(i) {
@@ -1403,13 +1774,13 @@ function removeImprovement(i) {
 // ACTION ITEMS
 // ========================================
 function updateActionOwnerDropdown() {
-  const sel = document.getElementById('actionOwner');
+  var sel = document.getElementById('actionOwner');
   sel.innerHTML = '<option value="">Select participant or type below...</option>' +
-    state.participants.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
+    state.participants.map(function(p) { return '<option value="' + esc(p.name) + '">' + esc(p.name) + '</option>'; }).join('');
 }
 
 function addActionItem(data) {
-  const item = data || {
+  var item = data || {
     description: document.getElementById('actionDesc').value.trim(),
     owner: document.getElementById('actionOwner').value || document.getElementById('actionOwnerCustom').value.trim(),
     dueDate: document.getElementById('actionDue').value,
@@ -1433,22 +1804,22 @@ function addActionItem(data) {
 }
 
 function renderActionItems() {
-  const tbody = document.getElementById('actionTableBody');
-  const msg = document.getElementById('noActionsMsg');
+  var tbody = document.getElementById('actionTableBody');
+  var msg = document.getElementById('noActionsMsg');
   tbody.innerHTML = '';
   if (state.actionItems.length === 0) { msg.style.display = 'block'; updateActionStats(); return; }
   msg.style.display = 'none';
-  state.actionItems.forEach((a, i) => {
-    const prClass = a.priority === 'High' ? 'priority-high' : a.priority === 'Low' ? 'priority-low' : 'priority-medium';
-    const stClass = a.status === 'Complete' ? 'status-complete' : a.status === 'In Progress' ? 'status-in-progress' : 'status-not-started';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i + 1}</td><td>${esc(a.description)}</td><td>${esc(a.owner)}</td>
-      <td>${a.dueDate || '—'}</td><td class="${prClass}">${a.priority}</td>
-      <td class="${stClass}">${a.status}</td><td>${esc(a.notes)}</td>
-      <td class="table-actions">
-        <button class="edit-btn" onclick="openEditAction(${i})">Edit</button>
-        <button class="delete-btn" onclick="deleteActionItem(${i})">Delete</button>
-      </td>`;
+  state.actionItems.forEach(function(a, i) {
+    var prClass = a.priority === 'High' ? 'priority-high' : a.priority === 'Low' ? 'priority-low' : 'priority-medium';
+    var stClass = a.status === 'Complete' ? 'status-complete' : a.status === 'In Progress' ? 'status-in-progress' : 'status-not-started';
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + esc(a.description) + '</td><td>' + esc(a.owner) + '</td>' +
+      '<td>' + (a.dueDate || '—') + '</td><td class="' + prClass + '">' + a.priority + '</td>' +
+      '<td class="' + stClass + '">' + a.status + '</td><td>' + esc(a.notes) + '</td>' +
+      '<td class="table-actions">' +
+        '<button class="edit-btn" onclick="openEditAction(' + i + ')">Edit</button>' +
+        '<button class="delete-btn" onclick="deleteActionItem(' + i + ')">Delete</button>' +
+      '</td>';
     tbody.appendChild(tr);
   });
   updateActionStats();
@@ -1456,8 +1827,8 @@ function renderActionItems() {
 
 function updateActionStats() {
   document.getElementById('totalActions').textContent = state.actionItems.length;
-  document.getElementById('highPriority').textContent = state.actionItems.filter(a => a.priority === 'High').length;
-  document.getElementById('completeActions').textContent = state.actionItems.filter(a => a.status === 'Complete').length;
+  document.getElementById('highPriority').textContent = state.actionItems.filter(function(a) { return a.priority === 'High'; }).length;
+  document.getElementById('completeActions').textContent = state.actionItems.filter(function(a) { return a.status === 'Complete'; }).length;
 }
 
 function deleteActionItem(i) {
@@ -1467,7 +1838,7 @@ function deleteActionItem(i) {
 }
 
 function openEditAction(i) {
-  const a = state.actionItems[i];
+  var a = state.actionItems[i];
   document.getElementById('editAIndex').value = i;
   document.getElementById('editADesc').value = a.description;
   document.getElementById('editAOwner').value = a.owner;
@@ -1481,7 +1852,7 @@ function openEditAction(i) {
 function closeEditAction() { document.getElementById('editActionModal').classList.remove('active'); }
 
 function saveEditAction() {
-  const i = parseInt(document.getElementById('editAIndex').value);
+  var i = parseInt(document.getElementById('editAIndex').value);
   state.actionItems[i] = {
     description: document.getElementById('editADesc').value.trim(),
     owner: document.getElementById('editAOwner').value.trim(),
@@ -1504,6 +1875,12 @@ function openSettings() {
   document.getElementById('brandSecondaryColor').value = brand.secondaryColor;
   document.getElementById('brandFOUO').checked = brand.fouo;
   document.getElementById('brandDefaultDept').value = brand.defaultDept || '';
+  document.getElementById('brandFramework').value = brand.framework || 'fema';
+  document.getElementById('secTimeline').checked = brand.sections ? brand.sections.timeline !== false : true;
+  document.getElementById('secDecisions').checked = brand.sections ? brand.sections.decisions !== false : true;
+  document.getElementById('secResourceGaps').checked = brand.sections ? brand.sections.resourceGaps !== false : true;
+  document.getElementById('secCommIssues').checked = brand.sections ? brand.sections.commIssues !== false : true;
+  document.getElementById('secAcronyms').checked = brand.sections ? brand.sections.acronyms !== false : true;
   if (brand.logoBase64) {
     document.getElementById('logoPreview').src = brand.logoBase64;
     document.getElementById('logoPreview').style.display = 'block';
@@ -1519,15 +1896,23 @@ function saveSettings() {
   brand.secondaryColor = document.getElementById('brandSecondaryColor').value;
   brand.fouo = document.getElementById('brandFOUO').checked;
   brand.defaultDept = document.getElementById('brandDefaultDept').value.trim();
+  brand.framework = document.getElementById('brandFramework').value;
+  brand.sections = {
+    timeline: document.getElementById('secTimeline').checked,
+    decisions: document.getElementById('secDecisions').checked,
+    resourceGaps: document.getElementById('secResourceGaps').checked,
+    commIssues: document.getElementById('secCommIssues').checked,
+    acronyms: document.getElementById('secAcronyms').checked,
+  };
   localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
   showToast('Brand settings saved', 'success');
   closeSettings();
 }
 
 function handleLogoUpload(event) {
-  const file = event.target.files[0];
+  var file = event.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
+  var reader = new FileReader();
   reader.onload = function(e) {
     brand.logoBase64 = e.target.result;
     document.getElementById('logoPreview').src = brand.logoBase64;
@@ -1537,89 +1922,108 @@ function handleLogoUpload(event) {
 }
 
 // ========================================
+// FEEDBACK
+// ========================================
+function openFeedback() {
+  document.getElementById('feedbackType').value = 'app';
+  document.getElementById('feedbackCategory').value = 'general';
+  document.getElementById('feedbackText').value = '';
+  document.getElementById('feedbackModal').classList.add('active');
+}
+
+function closeFeedback() {
+  document.getElementById('feedbackModal').classList.remove('active');
+}
+
+function formatFeedbackText() {
+  var type = document.getElementById('feedbackType').value === 'app' ? 'App Feedback' : 'Process Feedback';
+  var category = document.getElementById('feedbackCategory').value;
+  var text = document.getElementById('feedbackText').value;
+  return '[AAR Builder Feedback]\nType: ' + type + '\nCategory: ' + category + '\nDate: ' + new Date().toLocaleDateString() + '\n\n' + text;
+}
+
+function copyFeedback() {
+  var text = document.getElementById('feedbackText').value;
+  if (!text.trim()) { showToast('Please enter feedback first', 'error'); return; }
+  navigator.clipboard.writeText(formatFeedbackText()).then(function() {
+    showToast('Feedback copied to clipboard', 'success');
+    closeFeedback();
+  }).catch(function() { showToast('Failed to copy', 'error'); });
+}
+
+function emailFeedback() {
+  var text = document.getElementById('feedbackText').value;
+  if (!text.trim()) { showToast('Please enter feedback first', 'error'); return; }
+  var subject = encodeURIComponent('AAR Builder Feedback');
+  var body = encodeURIComponent(formatFeedbackText());
+  window.open('mailto:?subject=' + subject + '&body=' + body);
+  closeFeedback();
+}
+
+// ========================================
 // SAVE / LOAD / AUTOSAVE
 // ========================================
 function autoSave() {
   collectCurrentStepData();
   localStorage.setItem(APP_KEY, JSON.stringify(state));
-  const ind = document.getElementById('autosaveIndicator');
+  // Also save to V2 drafts if we have a current draft
+  if (currentDraftId) {
+    var drafts = {};
+    try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
+    if (drafts[currentDraftId]) {
+      drafts[currentDraftId].state = JSON.parse(JSON.stringify(state));
+      drafts[currentDraftId].meta.name = state.eventTitle || 'Untitled AAR';
+      drafts[currentDraftId].meta.eventType = state.eventType || '';
+      drafts[currentDraftId].meta.eventDate = state.eventDateStart || '';
+      drafts[currentDraftId].meta.updatedAt = Date.now();
+      localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(drafts));
+    }
+  }
+  var ind = document.getElementById('autosaveIndicator');
   ind.textContent = 'Saved ' + new Date().toLocaleTimeString();
 }
 
 setInterval(autoSave, 30000);
 
-function loadState() {
-  try {
-    const saved = localStorage.getItem(APP_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      state = { ...state, ...parsed };
-    }
-  } catch (e) { /* ignore parse errors */ }
-  try {
-    const savedBrand = localStorage.getItem(BRAND_KEY);
-    if (savedBrand) brand = { ...brand, ...JSON.parse(savedBrand) };
-  } catch (e) { /* ignore */ }
-  populateFields();
-  loadDraftList();
-}
-
 function saveDraft() {
   collectCurrentStepData();
-  const name = prompt('Enter a name for this draft:', state.eventTitle || 'Untitled AAR');
-  if (!name) return;
-  let drafts = {};
-  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}'); } catch (e) { drafts = {}; }
-  drafts[name] = JSON.parse(JSON.stringify(state));
-  localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
-  loadDraftList();
+  if (!currentDraftId) {
+    currentDraftId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+  var drafts = {};
+  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
+  var name = state.eventTitle || 'Untitled AAR';
+  drafts[currentDraftId] = {
+    meta: {
+      id: currentDraftId,
+      name: name,
+      status: (drafts[currentDraftId] && drafts[currentDraftId].meta.status) || 'draft',
+      createdAt: (drafts[currentDraftId] && drafts[currentDraftId].meta.createdAt) || Date.now(),
+      updatedAt: Date.now(),
+      eventType: state.eventType || '',
+      eventDate: state.eventDateStart || ''
+    },
+    state: JSON.parse(JSON.stringify(state))
+  };
+  localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(drafts));
   showToast('Draft saved: ' + name, 'success');
 }
 
-function loadDraftList() {
-  const sel = document.getElementById('draftSelector');
-  sel.innerHTML = '<option value="">-- Saved Drafts --</option>';
-  try {
-    const drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}');
-    Object.keys(drafts).forEach(name => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      sel.appendChild(opt);
-    });
-  } catch (e) { /* ignore */ }
-}
-
-document.getElementById('draftSelector').addEventListener('change', function() {
-  const name = this.value;
-  if (!name) return;
-  if (!confirm('Load draft "' + name + '"? Unsaved changes will be lost.')) { this.value = ''; return; }
-  try {
-    const drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}');
-    if (drafts[name]) {
-      state = { ...state, ...drafts[name] };
-      populateFields();
-      showToast('Loaded draft: ' + name, 'success');
-    }
-  } catch (e) { showToast('Failed to load draft', 'error'); }
-  this.value = '';
-});
-
 function exportJSON() {
   collectCurrentStepData();
-  const blob = new Blob([JSON.stringify({ state, brand }, null, 2)], { type: 'application/json' });
+  var blob = new Blob([JSON.stringify({ state: state, brand: brand }, null, 2)], { type: 'application/json' });
   saveAs(blob, (state.eventTitle || 'aar-draft').replace(/[^a-zA-Z0-9]/g, '_') + '.json');
   showToast('JSON exported', 'success');
 }
 
 function importJSON(event) {
-  const file = event.target.files[0];
+  var file = event.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
+  var reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const data = JSON.parse(e.target.result);
-      if (data.state) state = { ...state, ...data.state };
+      var data = JSON.parse(e.target.result);
+      if (data.state) state = { ...getDefaultState(), ...data.state };
       if (data.brand) brand = { ...brand, ...data.brand };
       localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
       populateFields();
@@ -1633,95 +2037,204 @@ function importJSON(event) {
 }
 
 // ========================================
+// COMPLETION PANEL
+// ========================================
+function showCompletionPanel() {
+  var panel = document.getElementById('completionPanel');
+  panel.style.display = 'block';
+  var summary = esc(state.eventTitle || 'Untitled') + ' &middot; ' + state.participants.length + ' participants &middot; ' + state.objectives.length + ' objectives &middot; ' + state.actionItems.length + ' action items';
+  document.getElementById('completionSummary').innerHTML = summary;
+  // Update button state if already completed
+  var drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}');
+  var btn = document.getElementById('markCompleteBtn');
+  if (currentDraftId && drafts[currentDraftId] && drafts[currentDraftId].meta.status === 'completed') {
+    btn.textContent = '\u2713 Completed';
+    btn.classList.remove('btn-outline');
+    btn.classList.add('btn-secondary');
+    btn.disabled = true;
+  } else {
+    btn.textContent = 'Mark as Complete';
+    btn.classList.add('btn-outline');
+    btn.classList.remove('btn-secondary');
+    btn.disabled = false;
+  }
+  panel.scrollIntoView({ behavior: 'smooth' });
+}
+
+function markComplete() {
+  if (!currentDraftId) return;
+  var drafts = {};
+  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
+  if (drafts[currentDraftId]) {
+    drafts[currentDraftId].meta.status = 'completed';
+    drafts[currentDraftId].meta.updatedAt = Date.now();
+    localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(drafts));
+    var btn = document.getElementById('markCompleteBtn');
+    btn.textContent = '\u2713 Completed';
+    btn.classList.remove('btn-outline');
+    btn.classList.add('btn-secondary');
+    btn.disabled = true;
+    showToast('AAR marked as complete', 'success');
+  }
+}
+
+// ========================================
+// MIGRATION V1 -> V2
+// ========================================
+function migrateDraftsV1toV2() {
+  try {
+    var v1 = localStorage.getItem(DRAFTS_KEY);
+    if (!v1) return;
+    var old = JSON.parse(v1);
+    if (!old || typeof old !== 'object') return;
+    var v2 = {};
+    try { v2 = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
+    Object.keys(old).forEach(function(name) {
+      var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      v2[id] = {
+        meta: { id: id, name: name, status: 'draft', createdAt: Date.now(), updatedAt: Date.now(), eventType: old[name].eventType || '', eventDate: old[name].eventDateStart || '' },
+        state: old[name]
+      };
+    });
+    localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(v2));
+    localStorage.removeItem(DRAFTS_KEY);
+  } catch(e) { console.error('Migration failed:', e); }
+}
+
+// ========================================
 // HTML PREVIEW
 // ========================================
 function refreshPreview() {
   collectCurrentStepData();
-  const c = document.getElementById('reportPreview');
-  const dateStr = state.eventDateStart ? formatDate(state.eventDateStart) + (state.eventDateEnd ? ' — ' + formatDate(state.eventDateEnd) : '') : 'N/A';
-  const ratingLabels = { P: 'Performed without Challenges', S: 'Performed with Some Challenges', M: 'Performed with Major Challenges', U: 'Unable to be Performed' };
-  const ratingBadgeClass = { P: 'p-badge', S: 's-badge', M: 'm-badge', U: 'u-badge' };
+  var c = document.getElementById('reportPreview');
+  var dateStr = state.eventDateStart ? formatDate(state.eventDateStart) + (state.eventDateEnd ? ' — ' + formatDate(state.eventDateEnd) : '') : 'N/A';
+  var ratingLabels = { P: 'Performed without Challenges', S: 'Performed with Some Challenges', M: 'Performed with Major Challenges', U: 'Unable to be Performed' };
+  var ratingBadgeClass = { P: 'p-badge', S: 's-badge', M: 'm-badge', U: 'u-badge' };
+  var capLabel = brand.framework === 'jc' ? 'JC Critical Area' : 'Core Capability';
 
-  let html = `<h1>${esc(state.eventTitle || 'Untitled AAR')}</h1>`;
-  html += `<p><strong>After-Action Report</strong> | ${esc(state.eventType || 'N/A')} | ${dateStr}</p>`;
-  if (brand.fouo) html += `<p style="color:var(--red); font-weight:600;">FOR OFFICIAL USE ONLY</p>`;
-  html += `<hr style="border:none;border-top:2px solid var(--primary);margin:16px 0;">`;
+  var html = '';
 
-  // Executive Summary
-  html += `<h2>1. Executive Summary</h2>`;
-  if (state.purpose) html += `<h3>Purpose</h3><p>${esc(state.purpose)}</p>`;
-  if (state.scope) html += `<h3>Scope</h3><p>${esc(state.scope)}</p>`;
+  // Cover page card
+  html += '<div class="preview-cover">';
+  html += '<div class="org-name">' + esc(brand.orgName) + '</div>';
+  html += '<div class="event-title">' + esc(state.eventTitle || 'Untitled AAR') + '</div>';
+  html += '<div class="subtitle">After-Action Report</div>';
+  var coverDetails = [
+    ['Event Type', state.eventType],
+    ['Date(s)', dateStr],
+    ['Location', state.eventLocation],
+    ['Sponsoring Organization', state.sponsorOrg],
+    ['Director', state.directorName + (state.directorTitle ? ', ' + state.directorTitle : '')],
+  ];
+  coverDetails.forEach(function(pair) {
+    if (pair[1] && pair[1].trim()) {
+      html += '<div class="detail-line"><span class="detail-label">' + pair[0] + ':</span> ' + esc(pair[1]) + '</div>';
+    }
+  });
+  if (brand.fouo) html += '<div class="preview-fouo">FOR OFFICIAL USE ONLY</div>';
+  html += '</div>';
 
-  // Event Overview
-  html += `<h2>2. Event Overview</h2>`;
-  html += `<table><tr><th>Field</th><th>Detail</th></tr>`;
-  html += `<tr><td>Event Title</td><td>${esc(state.eventTitle)}</td></tr>`;
-  html += `<tr><td>Event Type</td><td>${esc(state.eventType)}</td></tr>`;
-  html += `<tr><td>Date(s)</td><td>${dateStr}</td></tr>`;
-  html += `<tr><td>Location</td><td>${esc(state.eventLocation)}</td></tr>`;
-  html += `<tr><td>Sponsoring Org</td><td>${esc(state.sponsorOrg)}</td></tr>`;
-  html += `<tr><td>Director</td><td>${esc(state.directorName)}${state.directorTitle ? ', ' + esc(state.directorTitle) : ''}</td></tr>`;
-  html += `</table>`;
-  if (state.overallAssessment) html += `<h3>Overall Assessment</h3><p>${esc(state.overallAssessment)}</p>`;
+  html += '<hr class="preview-section-break">';
 
-  // Objectives
-  html += `<h2>3. Objectives and Performance</h2>`;
+  // Section 1: Executive Summary
+  html += '<h2>Section 1: Executive Summary</h2>';
+  if (state.purpose) html += '<h3>Purpose</h3><p>' + esc(state.purpose) + '</p>';
+  if (state.scope) html += '<h3>Scope</h3><p>' + esc(state.scope) + '</p>';
+
+  html += '<hr class="preview-section-break">';
+
+  // Section 2: Event Overview
+  html += '<h2>Section 2: Exercise/Incident Overview</h2>';
+  html += '<table><tr><th>Field</th><th>Detail</th></tr>';
+  html += '<tr><td>Event Title</td><td>' + esc(state.eventTitle) + '</td></tr>';
+  html += '<tr><td>Event Type</td><td>' + esc(state.eventType) + '</td></tr>';
+  html += '<tr><td>Date(s)</td><td>' + dateStr + '</td></tr>';
+  html += '<tr><td>Location</td><td>' + esc(state.eventLocation) + '</td></tr>';
+  html += '<tr><td>Sponsoring Org</td><td>' + esc(state.sponsorOrg) + '</td></tr>';
+  html += '<tr><td>Director</td><td>' + esc(state.directorName) + (state.directorTitle ? ', ' + esc(state.directorTitle) : '') + '</td></tr>';
+  html += '</table>';
+  if (state.overallAssessment) html += '<h3>Overall Assessment</h3><p>' + esc(state.overallAssessment) + '</p>';
+
+  html += '<hr class="preview-section-break">';
+
+  // Section 3: Objectives
+  html += '<h2>Section 3: Objectives and Performance</h2>';
   if (state.objectives.length === 0) { html += '<p style="color:var(--gray-500);">No objectives entered.</p>'; }
-  state.objectives.forEach((obj, i) => {
-    html += `<h3>Objective ${i + 1}: ${esc(obj.description || 'Untitled')}</h3>`;
-    if (obj.coreCapability) html += `<p><strong>Core Capability:</strong> ${esc(obj.coreCapability)}</p>`;
-    if (obj.rating) html += `<p><strong>Rating:</strong> <span class="preview-badge ${ratingBadgeClass[obj.rating] || ''}">${obj.rating} — ${ratingLabels[obj.rating] || ''}</span></p>`;
-    if (obj.analysis) html += `<p>${esc(obj.analysis)}</p>`;
+  state.objectives.forEach(function(obj, i) {
+    html += '<h3>Objective ' + (i + 1) + ': ' + esc(obj.description || 'Untitled') + '</h3>';
+    if (obj.coreCapability) html += '<p><strong>' + capLabel + ':</strong> ' + esc(obj.coreCapability) + '</p>';
+    if (obj.rating) html += '<p><strong>Rating:</strong> <span class="preview-badge ' + (ratingBadgeClass[obj.rating] || '') + '">' + obj.rating + ' — ' + (ratingLabels[obj.rating] || '') + '</span></p>';
+    if (obj.analysis) html += '<p>' + esc(obj.analysis) + '</p>';
   });
 
-  // Strengths
-  html += `<h2>4. Strengths</h2>`;
+  html += '<hr class="preview-section-break">';
+
+  // Section 4: Strengths
+  html += '<h2>Section 4: Strengths</h2>';
   if (state.strengths.length === 0) { html += '<p style="color:var(--gray-500);">No strengths entered.</p>'; }
   else {
     html += '<ul>';
-    state.strengths.forEach(s => {
-      const objRef = s.relatedObjective !== '' && state.objectives[parseInt(s.relatedObjective)] ? ' (Obj ' + (parseInt(s.relatedObjective) + 1) + ')' : '';
-      html += `<li>${esc(s.description)}${objRef}</li>`;
+    state.strengths.forEach(function(s) {
+      var objRef = s.relatedObjective !== '' && state.objectives[parseInt(s.relatedObjective)] ? ' (Obj ' + (parseInt(s.relatedObjective) + 1) + ')' : '';
+      html += '<li>' + esc(s.description) + objRef + '</li>';
     });
     html += '</ul>';
   }
 
-  // Areas for Improvement
-  html += `<h2>5. Areas for Improvement</h2>`;
+  html += '<hr class="preview-section-break">';
+
+  // Section 5: Areas for Improvement
+  html += '<h2>Section 5: Areas for Improvement</h2>';
   if (state.improvements.length > 0) {
-    html += `<table><tr><th>#</th><th>Area</th><th>Objective</th><th>Recommendation</th><th>Responsible</th><th>Target Date</th></tr>`;
-    state.improvements.forEach((imp, i) => {
-      const objRef = imp.relatedObjective !== '' && state.objectives[parseInt(imp.relatedObjective)] ? 'Obj ' + (parseInt(imp.relatedObjective) + 1) : '—';
-      html += `<tr><td>${i + 1}</td><td>${esc(imp.area)}</td><td>${objRef}</td><td>${esc(imp.recommendation)}</td><td>${esc(imp.responsibleParty)}</td><td>${imp.targetDate ? formatDate(imp.targetDate) : '—'}</td></tr>`;
+    html += '<table><tr><th>#</th><th>Area</th><th>Objective</th><th>Recommendation</th><th>Responsible</th><th>Target Date</th></tr>';
+    state.improvements.forEach(function(imp, i) {
+      var objRef = imp.relatedObjective !== '' && state.objectives[parseInt(imp.relatedObjective)] ? 'Obj ' + (parseInt(imp.relatedObjective) + 1) : '—';
+      html += '<tr><td>' + (i + 1) + '</td><td>' + esc(imp.area) + '</td><td>' + objRef + '</td><td>' + esc(imp.recommendation) + '</td><td>' + esc(imp.responsibleParty) + '</td><td>' + (imp.targetDate ? formatDate(imp.targetDate) : '—') + '</td></tr>';
     });
-    html += `</table>`;
+    html += '</table>';
   } else { html += '<p style="color:var(--gray-500);">None entered.</p>'; }
 
-  // Additional Context
-  html += `<h2>6. Additional Context</h2>`;
-  if (state.scenarioNarrative) html += `<h3>Scenario Narrative</h3><p>${esc(state.scenarioNarrative)}</p>`;
-  if (state.keyDecisions) html += `<h3>Key Decisions Made</h3><p>${esc(state.keyDecisions)}</p>`;
-  if (state.resourceGaps) html += `<h3>Resource Gaps Identified</h3><p>${esc(state.resourceGaps)}</p>`;
-  if (state.commIssues) html += `<h3>Communication Issues</h3><p>${esc(state.commIssues)}</p>`;
+  html += '<hr class="preview-section-break">';
 
-  // Participants
-  html += `<h2>Appendix A: Participants (${state.participants.length})</h2>`;
+  // Section 6: Additional Context
+  html += '<h2>Section 6: Additional Context</h2>';
+  var hasContext = false;
+  if (brand.sections.timeline && state.scenarioNarrative) { html += '<h3>Scenario Narrative</h3><p>' + esc(state.scenarioNarrative) + '</p>'; hasContext = true; }
+  if (brand.sections.decisions && state.keyDecisions) { html += '<h3>Key Decisions Made</h3><p>' + esc(state.keyDecisions) + '</p>'; hasContext = true; }
+  if (brand.sections.resourceGaps && state.resourceGaps) { html += '<h3>Resource Gaps Identified</h3><p>' + esc(state.resourceGaps) + '</p>'; hasContext = true; }
+  if (brand.sections.commIssues && state.commIssues) { html += '<h3>Communication Issues</h3><p>' + esc(state.commIssues) + '</p>'; hasContext = true; }
+  if (!hasContext) html += '<p style="color:var(--gray-500);">No additional context entered.</p>';
+
+  html += '<hr class="preview-section-break">';
+
+  // Appendix A: Participants
+  html += '<h2>Appendix A: Participant List (' + state.participants.length + ')</h2>';
   if (state.participants.length > 0) {
-    html += `<table><tr><th>#</th><th>Name</th><th>Title</th><th>Department</th><th>Email</th></tr>`;
-    state.participants.forEach((p, i) => {
-      html += `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td>${esc(p.title)}</td><td>${esc(p.department)}</td><td>${esc(p.email)}</td></tr>`;
+    html += '<table><tr><th>#</th><th>Name</th><th>Title</th><th>Department</th><th>Email</th></tr>';
+    state.participants.forEach(function(p, i) {
+      html += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.name) + '</td><td>' + esc(p.title) + '</td><td>' + esc(p.department) + '</td><td>' + esc(p.email) + '</td></tr>';
     });
-    html += `</table>`;
+    html += '</table>';
   }
 
-  // Action Items
-  html += `<h2>Appendix B: Action Items (${state.actionItems.length})</h2>`;
+  // Appendix B: Action Items
+  html += '<h2>Appendix B: Improvement Plan Tracking (' + state.actionItems.length + ')</h2>';
   if (state.actionItems.length > 0) {
-    html += `<table><tr><th>#</th><th>Action</th><th>Owner</th><th>Due</th><th>Priority</th><th>Status</th><th>Notes</th></tr>`;
-    state.actionItems.forEach((a, i) => {
-      html += `<tr><td>${i + 1}</td><td>${esc(a.description)}</td><td>${esc(a.owner)}</td><td>${a.dueDate ? formatDate(a.dueDate) : '—'}</td><td>${a.priority}</td><td>${a.status}</td><td>${esc(a.notes)}</td></tr>`;
+    html += '<table><tr><th>#</th><th>Action</th><th>Owner</th><th>Due</th><th>Priority</th><th>Status</th><th>Notes</th></tr>';
+    state.actionItems.forEach(function(a, i) {
+      html += '<tr><td>' + (i + 1) + '</td><td>' + esc(a.description) + '</td><td>' + esc(a.owner) + '</td><td>' + (a.dueDate ? formatDate(a.dueDate) : '—') + '</td><td>' + a.priority + '</td><td>' + a.status + '</td><td>' + esc(a.notes) + '</td></tr>';
     });
-    html += `</table>`;
+    html += '</table>';
+  }
+
+  // Appendix C: Acronyms
+  if (brand.sections.acronyms) {
+    html += '<h2>Appendix C: Acronym List</h2>';
+    html += '<table><tr><th>Acronym</th><th>Definition</th></tr>';
+    EM_ACRONYMS.forEach(function(pair) {
+      html += '<tr><td><strong>' + esc(pair[0]) + '</strong></td><td>' + esc(pair[1]) + '</td></tr>';
+    });
+    html += '</table>';
   }
 
   c.innerHTML = html;
@@ -1735,48 +2248,49 @@ async function generateDOCX() {
   showToast('Generating DOCX...', '');
 
   try {
-    const {
+    var {
       Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
       HeadingLevel, AlignmentType, BorderStyle, WidthType, PageBreak,
       Header, Footer, PageNumber, NumberFormat, ImageRun, Tab, TabStopPosition, TabStopType,
       ShadingType, TableLayoutType, VerticalAlign, convertInchesToTwip
     } = docx;
 
-    const primaryHex = brand.primaryColor.replace('#', '');
-    const secondaryHex = brand.secondaryColor.replace('#', '');
-    const dateStr = state.eventDateStart ? formatDate(state.eventDateStart) + (state.eventDateEnd ? ' - ' + formatDate(state.eventDateEnd) : '') : 'N/A';
-    const ratingLabels = { P: 'Performed without Challenges (P)', S: 'Performed with Some Challenges (S)', M: 'Performed with Major Challenges (M)', U: 'Unable to be Performed (U)' };
-    const ratingColors = { P: '38A169', S: 'D69E2E', M: 'DD6B20', U: 'E53E3E' };
+    var primaryHex = brand.primaryColor.replace('#', '');
+    var secondaryHex = brand.secondaryColor.replace('#', '');
+    var dateStr = state.eventDateStart ? formatDate(state.eventDateStart) + (state.eventDateEnd ? ' - ' + formatDate(state.eventDateEnd) : '') : 'N/A';
+    var ratingLabels = { P: 'Performed without Challenges (P)', S: 'Performed with Some Challenges (S)', M: 'Performed with Major Challenges (M)', U: 'Unable to be Performed (U)' };
+    var ratingColors = { P: '38A169', S: 'D69E2E', M: 'DD6B20', U: 'E53E3E' };
+    var capLabel = brand.framework === 'jc' ? 'JC Critical Area' : 'Core Capability';
 
     // Helper: create a table cell with consistent borders
-    function tc(content, opts = {}) {
-      const children = Array.isArray(content) ? content : [new Paragraph({ children: [new TextRun({ text: content || '', size: opts.fontSize || 20, font: 'Calibri', bold: opts.bold, color: opts.fontColor })] })];
+    function tc(content, opts) {
+      opts = opts || {};
+      var children = Array.isArray(content) ? content : [new Paragraph({ children: [new TextRun({ text: content || '', size: opts.fontSize || 20, font: 'Calibri', bold: opts.bold, color: opts.fontColor })] })];
       return new TableCell({
-        children,
+        children: children,
         shading: opts.shading ? { type: ShadingType.SOLID, color: opts.shading } : undefined,
         width: opts.width ? { size: opts.width, type: WidthType.PERCENTAGE } : undefined,
         verticalAlign: VerticalAlign.CENTER,
-        margins: { top: 60, bottom: 60, left: 80, right: 80 },
+        margins: { top: 30, bottom: 30, left: 60, right: 60 },
       });
     }
 
     // Helper: header row cell
     function thCell(text, width) {
-      return tc(text, { shading: primaryHex, fontColor: 'FFFFFF', bold: true, fontSize: 18, width });
+      return tc(text, { shading: primaryHex, fontColor: 'FFFFFF', bold: true, fontSize: 18, width: width });
     }
 
     // Build sections array
-    const sections = [];
-    const children = [];
+    var children = [];
 
     // --- COVER PAGE ---
-    children.push(new Paragraph({ spacing: { before: 3000 } }));
+    children.push(new Paragraph({ spacing: { before: 1800 } }));
 
     if (brand.logoBase64) {
       try {
-        const logoResp = await fetch(brand.logoBase64);
-        const logoBlob = await logoResp.blob();
-        const logoArr = await logoBlob.arrayBuffer();
+        var logoResp = await fetch(brand.logoBase64);
+        var logoBlob = await logoResp.blob();
+        var logoArr = await logoBlob.arrayBuffer();
         children.push(new Paragraph({
           alignment: AlignmentType.CENTER,
           children: [new ImageRun({ data: logoArr, transformation: { width: 200, height: 80 }, type: 'png' })],
@@ -1787,46 +2301,46 @@ async function generateDOCX() {
 
     children.push(new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
+      spacing: { after: 120 },
       children: [new TextRun({ text: brand.orgName, size: 36, font: 'Calibri', color: primaryHex, bold: true })],
     }));
 
     children.push(new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { before: 600, after: 200 },
+      spacing: { before: 360, after: 120 },
       children: [new TextRun({ text: state.eventTitle || 'After-Action Report', size: 52, font: 'Calibri', color: primaryHex, bold: true })],
     }));
 
     children.push(new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
+      spacing: { after: 120 },
       children: [new TextRun({ text: 'After-Action Report', size: 36, font: 'Calibri', color: secondaryHex })],
     }));
 
-    children.push(new Paragraph({ spacing: { before: 400 } }));
+    children.push(new Paragraph({ spacing: { before: 240 } }));
 
-    const coverDetails = [
+    var coverDetails = [
       ['Event Type', state.eventType],
       ['Date(s)', dateStr],
       ['Location', state.eventLocation],
       ['Sponsoring Organization', state.sponsorOrg],
       ['Director', state.directorName + (state.directorTitle ? ', ' + state.directorTitle : '')],
     ];
-    coverDetails.forEach(([label, value]) => {
-      if (value && value.trim()) {
+    coverDetails.forEach(function(pair) {
+      if (pair[1] && pair[1].trim()) {
         children.push(new Paragraph({
           alignment: AlignmentType.CENTER,
-          spacing: { after: 80 },
+          spacing: { after: 50 },
           children: [
-            new TextRun({ text: label + ': ', size: 22, font: 'Calibri', color: '718096', bold: true }),
-            new TextRun({ text: value, size: 22, font: 'Calibri', color: '2D3748' }),
+            new TextRun({ text: pair[0] + ': ', size: 22, font: 'Calibri', color: '718096', bold: true }),
+            new TextRun({ text: pair[1], size: 22, font: 'Calibri', color: '2D3748' }),
           ],
         }));
       }
     });
 
     if (brand.fouo) {
-      children.push(new Paragraph({ spacing: { before: 600 } }));
+      children.push(new Paragraph({ spacing: { before: 400 } }));
       children.push(new Paragraph({
         alignment: AlignmentType.CENTER,
         children: [new TextRun({ text: 'FOR OFFICIAL USE ONLY', size: 28, font: 'Calibri', color: 'E53E3E', bold: true })],
@@ -1837,9 +2351,9 @@ async function generateDOCX() {
     children.push(new Paragraph({ children: [new PageBreak()] }));
 
     // --- TABLE OF CONTENTS ---
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Table of Contents', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 300 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Table of Contents', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
 
-    const tocEntries = [
+    var tocEntries = [
       'Section 1: Executive Summary',
       'Section 2: Exercise/Incident Overview',
       'Section 3: Objectives and Performance',
@@ -1848,11 +2362,11 @@ async function generateDOCX() {
       'Section 6: Additional Context',
       'Appendix A: Participant List',
       'Appendix B: Improvement Plan Tracking',
-      'Appendix C: Acronym List',
     ];
-    tocEntries.forEach((entry, i) => {
+    if (brand.sections.acronyms) tocEntries.push('Appendix C: Acronym List');
+    tocEntries.forEach(function(entry) {
       children.push(new Paragraph({
-        spacing: { after: 100 },
+        spacing: { after: 60 },
         children: [new TextRun({ text: entry, size: 22, font: 'Calibri', color: secondaryHex })],
       }));
     });
@@ -1860,22 +2374,22 @@ async function generateDOCX() {
     children.push(new Paragraph({ children: [new PageBreak()] }));
 
     // --- SECTION 1: EXECUTIVE SUMMARY ---
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 1: Executive Summary', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 1: Executive Summary', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
 
     if (state.purpose) {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Purpose', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 200, after: 100 } }));
-      children.push(new Paragraph({ children: [new TextRun({ text: state.purpose, size: 22, font: 'Calibri' })], spacing: { after: 200 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Purpose', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: state.purpose, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
     }
     if (state.scope) {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Scope', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 200, after: 100 } }));
-      children.push(new Paragraph({ children: [new TextRun({ text: state.scope, size: 22, font: 'Calibri' })], spacing: { after: 200 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Scope', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: state.scope, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
     }
 
     // --- SECTION 2: OVERVIEW ---
     children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 2: Exercise/Incident Overview', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 2: Exercise/Incident Overview', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
 
-    const overviewData = [
+    var overviewData = [
       ['Event Title', state.eventTitle],
       ['Event Type', state.eventType],
       ['Date(s)', dateStr],
@@ -1884,12 +2398,12 @@ async function generateDOCX() {
       ['Exercise/Incident Director', state.directorName + (state.directorTitle ? ', ' + state.directorTitle : '')],
     ];
 
-    const overviewRows = overviewData.map(([label, value], i) => {
-      const shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+    var overviewRows = overviewData.map(function(pair, i) {
+      var shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
       return new TableRow({
         children: [
-          tc(label, { bold: true, shading: shade, width: 35 }),
-          tc(value || 'N/A', { shading: shade, width: 65 }),
+          tc(pair[0], { bold: true, shading: shade, width: 35 }),
+          tc(pair[1] || 'N/A', { shading: shade, width: 65 }),
         ],
       });
     });
@@ -1897,29 +2411,29 @@ async function generateDOCX() {
     children.push(new Table({ rows: overviewRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
 
     if (state.overallAssessment) {
-      children.push(new Paragraph({ spacing: { before: 300 } }));
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Overall Assessment', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { after: 100 } }));
-      children.push(new Paragraph({ children: [new TextRun({ text: state.overallAssessment, size: 22, font: 'Calibri' })], spacing: { after: 200 } }));
+      children.push(new Paragraph({ spacing: { before: 160 } }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Overall Assessment', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { after: 60 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: state.overallAssessment, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
     }
 
     // --- SECTION 3: OBJECTIVES ---
     children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 3: Objectives and Performance', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 3: Objectives and Performance', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
 
-    state.objectives.forEach((obj, i) => {
+    state.objectives.forEach(function(obj, i) {
       children.push(new Paragraph({
         heading: HeadingLevel.HEADING_2,
-        children: [new TextRun({ text: `Objective ${i + 1}: ${obj.description || 'Untitled'}`, bold: true, color: secondaryHex, font: 'Calibri', size: 26 })],
-        spacing: { before: 300, after: 100 },
+        children: [new TextRun({ text: 'Objective ' + (i + 1) + ': ' + (obj.description || 'Untitled'), bold: true, color: secondaryHex, font: 'Calibri', size: 26 })],
+        spacing: { before: 160, after: 60 },
       }));
 
       if (obj.coreCapability) {
         children.push(new Paragraph({
           children: [
-            new TextRun({ text: 'Core Capability: ', bold: true, size: 22, font: 'Calibri', color: '4A5568' }),
+            new TextRun({ text: capLabel + ': ', bold: true, size: 22, font: 'Calibri', color: '4A5568' }),
             new TextRun({ text: obj.coreCapability, size: 22, font: 'Calibri' }),
           ],
-          spacing: { after: 80 },
+          spacing: { after: 50 },
         }));
       }
 
@@ -1929,7 +2443,7 @@ async function generateDOCX() {
             new TextRun({ text: 'Performance Rating: ', bold: true, size: 22, font: 'Calibri', color: '4A5568' }),
             new TextRun({ text: ratingLabels[obj.rating] || obj.rating, size: 22, font: 'Calibri', bold: true, color: ratingColors[obj.rating] || '2D3748' }),
           ],
-          spacing: { after: 80 },
+          spacing: { after: 50 },
         }));
       }
 
@@ -1938,20 +2452,19 @@ async function generateDOCX() {
           children: [new TextRun({ text: 'Analysis:', bold: true, size: 22, font: 'Calibri', color: '4A5568' })],
           spacing: { before: 100, after: 40 },
         }));
-        children.push(new Paragraph({ children: [new TextRun({ text: obj.analysis, size: 22, font: 'Calibri' })], spacing: { after: 200 } }));
+        children.push(new Paragraph({ children: [new TextRun({ text: obj.analysis, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
       }
     });
 
     if (state.objectives.length === 0) {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No objectives were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 200 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No objectives were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
-    // --- SECTION 4: STRENGTHS ---
-    children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 4: Strengths', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+    // --- SECTION 4: STRENGTHS (no page break — let content flow) ---
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 4: Strengths', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { before: 240, after: 120 } }));
 
-    state.strengths.forEach(s => {
-      const objRef = s.relatedObjective !== '' && state.objectives[parseInt(s.relatedObjective)]
+    state.strengths.forEach(function(s) {
+      var objRef = s.relatedObjective !== '' && state.objectives[parseInt(s.relatedObjective)]
         ? ' [Objective ' + (parseInt(s.relatedObjective) + 1) + ']'
         : '';
       children.push(new Paragraph({
@@ -1960,25 +2473,25 @@ async function generateDOCX() {
           new TextRun({ text: s.description, size: 22, font: 'Calibri' }),
           new TextRun({ text: objRef, size: 20, font: 'Calibri', italics: true, color: '718096' }),
         ],
-        spacing: { after: 80 },
+        spacing: { after: 50 },
       }));
     });
 
     if (state.strengths.length === 0) {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No strengths were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 200 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No strengths were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
     // --- SECTION 5: AREAS FOR IMPROVEMENT ---
     children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 5: Areas for Improvement', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 5: Areas for Improvement', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
 
     if (state.improvements.length > 0) {
-      const impHeader = new TableRow({
+      var impHeader = new TableRow({
         children: [thCell('#', 5), thCell('Area', 25), thCell('Objective', 15), thCell('Recommendation', 25), thCell('Responsible', 15), thCell('Target Date', 15)],
       });
-      const impRows = state.improvements.map((imp, i) => {
-        const objRef = imp.relatedObjective !== '' && state.objectives[parseInt(imp.relatedObjective)] ? 'Obj ' + (parseInt(imp.relatedObjective) + 1) : '—';
-        const shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+      var impRows = state.improvements.map(function(imp, i) {
+        var objRef = imp.relatedObjective !== '' && state.objectives[parseInt(imp.relatedObjective)] ? 'Obj ' + (parseInt(imp.relatedObjective) + 1) : '—';
+        var shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
         return new TableRow({
           children: [
             tc(String(i + 1), { shading: shade, fontSize: 18 }),
@@ -1992,36 +2505,39 @@ async function generateDOCX() {
       });
       children.push(new Table({ rows: [impHeader, ...impRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
     } else {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No areas for improvement were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 200 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No areas for improvement were documented.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
-    // --- SECTION 6: ADDITIONAL CONTEXT ---
-    children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 6: Additional Context', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+    // --- SECTION 6: ADDITIONAL CONTEXT (no page break — let content flow) ---
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 6: Additional Context', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { before: 240, after: 120 } }));
 
-    const contextSections = [
-      ['Scenario Narrative', state.scenarioNarrative],
-      ['Key Decisions Made', state.keyDecisions],
-      ['Resource Gaps Identified', state.resourceGaps],
-      ['Communication Issues', state.commIssues],
-    ];
-    contextSections.forEach(([title, content]) => {
-      if (content && content.trim()) {
-        children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: title, bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 200, after: 100 } }));
-        children.push(new Paragraph({ children: [new TextRun({ text: content, size: 22, font: 'Calibri' })], spacing: { after: 200 } }));
-      }
-    });
+    if (brand.sections.timeline && state.scenarioNarrative && state.scenarioNarrative.trim()) {
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Scenario Narrative', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: state.scenarioNarrative, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+    }
+    if (brand.sections.decisions && state.keyDecisions && state.keyDecisions.trim()) {
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Key Decisions Made', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: state.keyDecisions, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+    }
+    if (brand.sections.resourceGaps && state.resourceGaps && state.resourceGaps.trim()) {
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Resource Gaps Identified', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: state.resourceGaps, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+    }
+    if (brand.sections.commIssues && state.commIssues && state.commIssues.trim()) {
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Communication Issues', bold: true, color: secondaryHex, font: 'Calibri', size: 26 })], spacing: { before: 160, after: 60 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: state.commIssues, size: 22, font: 'Calibri' })], spacing: { after: 120 } }));
+    }
 
     // --- APPENDIX A: PARTICIPANTS ---
     children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix A: Participant List', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix A: Participant List', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
 
     if (state.participants.length > 0) {
-      const pHeader = new TableRow({
+      var pHeader = new TableRow({
         children: [thCell('#', 8), thCell('Name', 25), thCell('Title/Role', 25), thCell('Department', 22), thCell('Email', 20)],
       });
-      const pRows = state.participants.map((p, i) => {
-        const shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+      var pRows = state.participants.map(function(p, i) {
+        var shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
         return new TableRow({
           children: [
             tc(String(i + 1), { shading: shade, fontSize: 18 }),
@@ -2034,19 +2550,19 @@ async function generateDOCX() {
       });
       children.push(new Table({ rows: [pHeader, ...pRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
     } else {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No participants were recorded.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 200 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No participants were recorded.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
     // --- APPENDIX B: ACTION ITEMS ---
     children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix B: Improvement Plan Tracking', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix B: Improvement Plan Tracking', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
 
     if (state.actionItems.length > 0) {
-      const aHeader = new TableRow({
+      var aHeader = new TableRow({
         children: [thCell('#', 5), thCell('Action', 25), thCell('Owner', 15), thCell('Due Date', 12), thCell('Priority', 10), thCell('Status', 12), thCell('Notes', 21)],
       });
-      const aRows = state.actionItems.map((a, i) => {
-        const shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+      var aRows = state.actionItems.map(function(a, i) {
+        var shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
         return new TableRow({
           children: [
             tc(String(i + 1), { shading: shade, fontSize: 18 }),
@@ -2061,26 +2577,28 @@ async function generateDOCX() {
       });
       children.push(new Table({ rows: [aHeader, ...aRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
     } else {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No action items were recorded.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 200 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: 'No action items were recorded.', size: 22, font: 'Calibri', italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
     // --- APPENDIX C: ACRONYMS ---
-    children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix C: Acronym List', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 200 } }));
+    if (brand.sections.acronyms) {
+      children.push(new Paragraph({ children: [new PageBreak()] }));
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix C: Acronym List', bold: true, color: primaryHex, font: 'Calibri', size: 32 })], spacing: { after: 120 } }));
 
-    const acHeader = new TableRow({
-      children: [thCell('Acronym', 25), thCell('Definition', 75)],
-    });
-    const acRows = EM_ACRONYMS.map(([acr, def], i) => {
-      const shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
-      return new TableRow({
-        children: [tc(acr, { shading: shade, bold: true, fontSize: 20 }), tc(def, { shading: shade, fontSize: 20 })],
+      var acHeader = new TableRow({
+        children: [thCell('Acronym', 25), thCell('Definition', 75)],
       });
-    });
-    children.push(new Table({ rows: [acHeader, ...acRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
+      var acRows = EM_ACRONYMS.map(function(pair, i) {
+        var shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+        return new TableRow({
+          children: [tc(pair[0], { shading: shade, bold: true, fontSize: 20 }), tc(pair[1], { shading: shade, fontSize: 20 })],
+        });
+      });
+      children.push(new Table({ rows: [acHeader, ...acRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
+    }
 
     // --- BUILD DOCUMENT ---
-    const doc = new Document({
+    var doc = new Document({
       styles: {
         default: {
           document: { run: { font: 'Calibri', size: 22 } },
@@ -2116,14 +2634,15 @@ async function generateDOCX() {
             })],
           }),
         },
-        children,
+        children: children,
       }],
     });
 
-    const blob = await Packer.toBlob(doc);
-    const filename = (state.eventTitle || 'AAR').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_') + '_AAR.docx';
+    var blob = await Packer.toBlob(doc);
+    var filename = (state.eventTitle || 'AAR').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_') + '_AAR.docx';
     saveAs(blob, filename);
     showToast('DOCX generated successfully!', 'success');
+    showCompletionPanel();
   } catch (err) {
     console.error('DOCX generation error:', err);
     showToast('DOCX generation failed: ' + err.message, 'error');
@@ -2136,68 +2655,108 @@ async function generateDOCX() {
 function generateXLSX() {
   collectCurrentStepData();
   showToast('Generating XLSX...', '');
-
   try {
-    const wb = XLSX.utils.book_new();
+    var wb = XLSX.utils.book_new();
+    var isIncident = state.eventType === 'Real-World Incident';
+    var emLead = state.directorName || '';
 
-    // Sheet 1: Action Items
-    const actionData = state.actionItems.map((a, i) => ({
-      'ID': i + 1,
-      'Action': a.description,
-      'Owner': a.owner,
-      'Due Date': a.dueDate || '',
-      'Priority': a.priority,
-      'Status': a.status,
-      'Related Objective': '',
-      'Notes': a.notes,
-      'AAR Title': state.eventTitle,
-      'AAR Date': state.eventDateStart,
-    }));
-    if (actionData.length === 0) {
-      actionData.push({ 'ID': '', 'Action': '', 'Owner': '', 'Due Date': '', 'Priority': '', 'Status': '', 'Related Objective': '', 'Notes': '', 'AAR Title': '', 'AAR Date': '' });
+    if (isIncident) {
+      // Incident Tracker sheet
+      var data = state.improvements.map(function(imp) {
+        var objRef = imp.relatedObjective !== '' && state.objectives[parseInt(imp.relatedObjective)]
+          ? state.objectives[parseInt(imp.relatedObjective)].coreCapability || '' : '';
+        return {
+          'Incident Name': state.eventTitle,
+          'Incident Date': state.eventDateStart ? formatDate(state.eventDateStart) : '',
+          'Joint Commission Critical Areas': objRef,
+          'Issue/Area for Improvement': imp.area,
+          'Description': imp.recommendation,
+          'Primary Responsible Department': imp.responsibleParty,
+          'Department POC': '',
+          'EM Lead': emLead,
+          'Status': 'Not Assigned',
+          'Start Date': '',
+          'Completion Date': imp.targetDate ? formatDate(imp.targetDate) : '',
+          'Notes': ''
+        };
+      });
+      // Also add action items as rows
+      state.actionItems.forEach(function(a) {
+        data.push({
+          'Incident Name': state.eventTitle,
+          'Incident Date': state.eventDateStart ? formatDate(state.eventDateStart) : '',
+          'Joint Commission Critical Areas': '',
+          'Issue/Area for Improvement': a.description,
+          'Description': a.notes || '',
+          'Primary Responsible Department': '',
+          'Department POC': a.owner,
+          'EM Lead': emLead,
+          'Status': a.status === 'Complete' ? 'Complete' : a.status === 'In Progress' ? 'In Progress' : 'Not Assigned',
+          'Start Date': '',
+          'Completion Date': a.dueDate ? formatDate(a.dueDate) : '',
+          'Notes': ''
+        });
+      });
+      if (data.length === 0) data.push({'Incident Name':'','Incident Date':'','Joint Commission Critical Areas':'','Issue/Area for Improvement':'','Description':'','Primary Responsible Department':'','Department POC':'','EM Lead':'','Status':'','Start Date':'','Completion Date':'','Notes':''});
+      var ws = XLSX.utils.json_to_sheet(data);
+      ws['!cols'] = [{wch:25},{wch:14},{wch:22},{wch:30},{wch:40},{wch:25},{wch:18},{wch:18},{wch:14},{wch:14},{wch:14},{wch:25}];
+      XLSX.utils.book_append_sheet(wb, ws, 'Incident Tracker');
+    } else {
+      // Exercise Tracker sheet
+      var data = state.improvements.map(function(imp) {
+        var objIdx = parseInt(imp.relatedObjective);
+        var obj = state.objectives[objIdx];
+        return {
+          'Exercise Name': state.eventTitle,
+          'Exercise Objective': obj ? obj.description : '',
+          'JC Critical Areas': obj ? (obj.coreCapability || '') : '',
+          'Issue/Area for Improvement': imp.area,
+          'Action Item': imp.recommendation,
+          'Primary Responsible Department': imp.responsibleParty,
+          'Department POC': '',
+          'Start Date': '',
+          'Completion Date': imp.targetDate ? formatDate(imp.targetDate) : '',
+          'Progress': 'Not Assigned',
+          'Notes': ''
+        };
+      });
+      state.actionItems.forEach(function(a) {
+        data.push({
+          'Exercise Name': state.eventTitle,
+          'Exercise Objective': '',
+          'JC Critical Areas': '',
+          'Issue/Area for Improvement': a.description,
+          'Action Item': a.notes || '',
+          'Primary Responsible Department': '',
+          'Department POC': a.owner,
+          'Start Date': '',
+          'Completion Date': a.dueDate ? formatDate(a.dueDate) : '',
+          'Progress': a.status === 'Complete' ? 'Complete' : a.status === 'In Progress' ? 'In Progress' : 'Not Assigned',
+          'Notes': ''
+        });
+      });
+      if (data.length === 0) data.push({'Exercise Name':'','Exercise Objective':'','JC Critical Areas':'','Issue/Area for Improvement':'','Action Item':'','Primary Responsible Department':'','Department POC':'','Start Date':'','Completion Date':'','Progress':'','Notes':''});
+      var ws = XLSX.utils.json_to_sheet(data);
+      ws['!cols'] = [{wch:25},{wch:30},{wch:22},{wch:30},{wch:40},{wch:25},{wch:18},{wch:14},{wch:14},{wch:14},{wch:25}];
+      XLSX.utils.book_append_sheet(wb, ws, 'Exercise Tracker');
     }
-    const ws1 = XLSX.utils.json_to_sheet(actionData);
-    ws1['!cols'] = [
-      { wch: 5 }, { wch: 40 }, { wch: 20 }, { wch: 12 }, { wch: 10 },
-      { wch: 14 }, { wch: 20 }, { wch: 30 }, { wch: 30 }, { wch: 12 },
-    ];
-    XLSX.utils.book_append_sheet(wb, ws1, 'Action Items');
 
-    // Sheet 2: Improvement Plan
-    const impData = state.improvements.map((imp, i) => {
-      const objRef = imp.relatedObjective !== '' && state.objectives[parseInt(imp.relatedObjective)]
-        ? 'Objective ' + (parseInt(imp.relatedObjective) + 1)
-        : '';
-      return {
-        '#': i + 1,
-        'Area for Improvement': imp.area,
-        'Related Objective': objRef,
-        'Recommendation': imp.recommendation,
-        'Responsible Party': imp.responsibleParty,
-        'Target Date': imp.targetDate || '',
-        'Status': 'Not Started',
-        'Evidence of Completion': '',
-        'Notes': '',
-      };
-    });
-    if (impData.length === 0) {
-      impData.push({ '#': '', 'Area for Improvement': '', 'Related Objective': '', 'Recommendation': '', 'Responsible Party': '', 'Target Date': '', 'Status': '', 'Evidence of Completion': '', 'Notes': '' });
-    }
-    const ws2 = XLSX.utils.json_to_sheet(impData);
-    ws2['!cols'] = [
-      { wch: 5 }, { wch: 35 }, { wch: 20 }, { wch: 35 }, { wch: 20 },
-      { wch: 12 }, { wch: 14 }, { wch: 25 }, { wch: 25 },
+    // Reference sheet for status values
+    var refData = [
+      {Status: 'Not Assigned'}, {Status: 'Assigned'}, {Status: 'In Progress'}, {Status: 'Complete'}, {Status: 'On Hold'}
     ];
-    XLSX.utils.book_append_sheet(wb, ws2, 'Improvement Plan');
+    var wsRef = XLSX.utils.json_to_sheet(refData);
+    XLSX.utils.book_append_sheet(wb, wsRef, 'Reference');
 
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], { type: 'application/octet-stream' });
-    const filename = (state.eventTitle || 'AAR').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_') + '_Tracker.xlsx';
+    var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    var blob = new Blob([wbout], { type: 'application/octet-stream' });
+    var filename = (state.eventTitle || 'AAR').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_') + '_Tracker.xlsx';
     saveAs(blob, filename);
-    showToast('XLSX generated successfully!', 'success');
+    showToast('XLSX generated!', 'success');
+    showCompletionPanel();
   } catch (err) {
-    console.error('XLSX generation error:', err);
-    showToast('XLSX generation failed: ' + err.message, 'error');
+    console.error('XLSX error:', err);
+    showToast('XLSX failed: ' + err.message, 'error');
   }
 }
 
@@ -2211,7 +2770,7 @@ async function generateBoth() {
 // ========================================
 function esc(str) {
   if (!str) return '';
-  const div = document.createElement('div');
+  var div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
 }
@@ -2219,39 +2778,43 @@ function esc(str) {
 function formatDate(dateStr) {
   if (!dateStr) return '';
   try {
-    const parts = dateStr.split('-');
+    var parts = dateStr.split('-');
     return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   } catch (e) { return dateStr; }
 }
 
 function showToast(msg, type) {
-  const t = document.getElementById('toast');
+  var t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast show' + (type ? ' ' + type : '');
   clearTimeout(t._timeout);
-  t._timeout = setTimeout(() => t.className = 'toast', 3000);
+  t._timeout = setTimeout(function() { t.className = 'toast'; }, 3000);
 }
 
 // ========================================
 // INITIALIZATION
 // ========================================
-window.addEventListener('DOMContentLoaded', () => {
-  loadState();
-  updateStepCompleteness();
+window.addEventListener('DOMContentLoaded', function() {
+  migrateDraftsV1toV2();
+  try {
+    var savedBrand = localStorage.getItem(BRAND_KEY);
+    if (savedBrand) brand = { ...brand, ...JSON.parse(savedBrand) };
+  } catch (e) {}
+  showDashboard();
 });
 
 // Close modals on overlay click
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => {
+document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+  overlay.addEventListener('click', function(e) {
     if (e.target === overlay) overlay.classList.remove('active');
   });
 });
 
 // Keyboard nav — Enter to submit participant
-document.getElementById('pEmail').addEventListener('keypress', e => { if (e.key === 'Enter') addParticipant(); });
-document.getElementById('pName').addEventListener('keypress', e => { if (e.key === 'Enter') addParticipant(); });
-document.getElementById('actionNotes').addEventListener('keypress', e => { if (e.key === 'Enter') addActionItem(); });
-document.getElementById('actionDesc').addEventListener('keypress', e => { if (e.key === 'Enter') addActionItem(); });
+document.getElementById('pEmail').addEventListener('keypress', function(e) { if (e.key === 'Enter') addParticipant(); });
+document.getElementById('pName').addEventListener('keypress', function(e) { if (e.key === 'Enter') addParticipant(); });
+document.getElementById('actionNotes').addEventListener('keypress', function(e) { if (e.key === 'Enter') addActionItem(); });
+document.getElementById('actionDesc').addEventListener('keypress', function(e) { if (e.key === 'Enter') addActionItem(); });
 </script>
 </body>
 </html>
