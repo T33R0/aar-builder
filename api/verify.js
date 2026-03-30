@@ -1,9 +1,14 @@
-export default function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { password } = req.body || {};
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch (e) { body = {}; }
+  }
+
+  const password = (body && body.password) || '';
   const correct = process.env.AAR_PASSWORD;
 
   if (!correct) {
@@ -15,4 +20,4 @@ export default function handler(req, res) {
   }
 
   return res.status(401).json({ success: false });
-}
+};
