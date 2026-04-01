@@ -1,9 +1,0 @@
-{
-  "private": true,
-  "engines": {
-    "node": "18.x"
-  },
-  "dependencies": {
-    "node-fetch": "^2.7.0"
-  }
-}

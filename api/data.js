@@ -1,5 +1,6 @@
 var crypto = require('crypto');
-var fetch = require('node-fetch');
+var https = require('https');
+var urlMod = require('url');
 
 function validateToken(token) {
   try {
@@ -18,22 +19,38 @@ function validateToken(token) {
 
 function sb(path, opts) {
   opts = opts || {};
-  var url = (process.env.SUPABASE_URL || '') + '/rest/v1/' + path;
+  var fullUrl = (process.env.SUPABASE_URL || '') + '/rest/v1/' + path;
+  var parsed = urlMod.parse(fullUrl);
+  var method = opts.method || 'GET';
+  var bodyStr = opts.body ? JSON.stringify(opts.body) : null;
   var headers = {
     'apikey': process.env.SUPABASE_SERVICE_KEY || '',
     'Authorization': 'Bearer ' + (process.env.SUPABASE_SERVICE_KEY || ''),
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
   };
   if (opts.prefer) headers['Prefer'] = opts.prefer;
-  return fetch(url, {
-    method: opts.method || 'GET',
-    headers: headers,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  }).then(function (r) {
-    if (opts.method === 'DELETE') return { ok: r.ok };
-    return r.text().then(function (t) {
-      try { return JSON.parse(t); } catch (e) { return t; }
+  if (bodyStr) headers['Content-Length'] = Buffer.byteLength(bodyStr);
+
+  return new Promise(function (resolve, reject) {
+    var req = https.request({
+      hostname: parsed.hostname,
+      port: parsed.port || 443,
+      path: parsed.path,
+      method: method,
+      headers: headers,
+    }, function (res) {
+      var chunks = [];
+      res.on('data', function (c) { chunks.push(c); });
+      res.on('end', function () {
+        var text = Buffer.concat(chunks).toString();
+        if (method === 'DELETE' && !text) { resolve({ ok: true }); return; }
+        try { resolve(JSON.parse(text)); } catch (e) { resolve(text); }
+      });
     });
+    req.on('error', reject);
+    if (bodyStr) req.write(bodyStr);
+    req.end();
   });
 }
 
@@ -49,7 +66,7 @@ module.exports = async function handler(req, res) {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
-    return res.status(500).json({ error: 'Server misconfigured: missing Supabase env vars' });
+    return res.status(500).json({ error: 'Server misconfigured: SUPABASE_URL or SUPABASE_SERVICE_KEY not set' });
   }
 
   var user;
@@ -67,7 +84,6 @@ module.exports = async function handler(req, res) {
 
   try {
 
-  // === LIST DOCUMENTS (org-scoped) ===
   if (req.method === 'GET' && action === 'documents') {
     var docs = await sb(
       'aar_documents?org_id=eq.' + user.org_id +
@@ -76,7 +92,6 @@ module.exports = async function handler(req, res) {
     return res.json({ documents: Array.isArray(docs) ? docs : [] });
   }
 
-  // === GET SINGLE DOCUMENT ===
   if (req.method === 'GET' && action === 'document') {
     var docId = req.query.id;
     if (!docId) return res.status(400).json({ error: 'Missing id' });
@@ -85,7 +100,6 @@ module.exports = async function handler(req, res) {
     return res.json({ document: docs[0] });
   }
 
-  // === SAVE DOCUMENT (upsert) ===
   if (req.method === 'POST' && action === 'save-document') {
     var doc = body.document;
     if (!doc || !doc.id) return res.status(400).json({ error: 'Missing document' });
@@ -113,7 +127,6 @@ module.exports = async function handler(req, res) {
     return res.json({ success: true });
   }
 
-  // === DELETE DOCUMENT (owner only) ===
   if (req.method === 'POST' && action === 'delete-document') {
     var docId = body.id;
     if (!docId) return res.status(400).json({ error: 'Missing id' });
@@ -124,13 +137,11 @@ module.exports = async function handler(req, res) {
     return res.json({ success: true });
   }
 
-  // === GET BRANDING ===
   if (req.method === 'GET' && action === 'branding') {
     var orgs = await sb('aar_organizations?id=eq.' + user.org_id + '&select=branding');
     return res.json({ branding: (Array.isArray(orgs) && orgs[0]) ? orgs[0].branding : {} });
   }
 
-  // === SAVE BRANDING (org-level) ===
   if (req.method === 'POST' && action === 'save-branding') {
     if (!body.branding) return res.status(400).json({ error: 'Missing branding' });
     await sb('aar_organizations?id=eq.' + user.org_id, {
@@ -141,13 +152,11 @@ module.exports = async function handler(req, res) {
     return res.json({ success: true });
   }
 
-  // === LIST ORGANIZATIONS ===
   if (req.method === 'GET' && action === 'organizations') {
     var orgs = await sb('aar_organizations?select=id,name&order=name');
     return res.json({ organizations: Array.isArray(orgs) ? orgs : [] });
   }
 
-  // === CHANGE ORGANIZATION ===
   if (req.method === 'POST' && action === 'change-org') {
     var orgId = body.orgId;
     if (!orgId) return res.status(400).json({ error: 'Missing orgId' });
@@ -161,7 +170,6 @@ module.exports = async function handler(req, res) {
     return res.json({ success: true, org: org });
   }
 
-  // === CHANGE PASSWORD ===
   if (req.method === 'POST' && action === 'change-password') {
     var np = (body.newPassword || '').trim();
     if (!np) return res.status(400).json({ error: 'Missing password' });
@@ -174,7 +182,6 @@ module.exports = async function handler(req, res) {
     return res.json({ success: true });
   }
 
-  // === IMPORT DOCUMENTS (bulk, for localStorage migration) ===
   if (req.method === 'POST' && action === 'import-documents') {
     var docs = body.documents;
     if (!docs || !Array.isArray(docs)) return res.status(400).json({ error: 'Missing documents array' });
