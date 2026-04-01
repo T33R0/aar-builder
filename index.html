@@ -4329,40 +4329,65 @@ function initApp() {
       docs.forEach(function(d) {
         serverDrafts[d.id] = d;
       });
-      // Auto-import localStorage drafts if first server login (calls renderDashboard internally)
-      maybeImportLocalDrafts();
+      // Auto-import localStorage data if first server login (calls renderDashboard internally)
+      maybeImportLocalData();
     });
   } else {
     showDashboardNoHistory();
   }
 }
 
-function maybeImportLocalDrafts() {
-  if (localStorage.getItem('aar-imported')) { renderDashboard(); return; }
-  var localDrafts = {};
-  try { localDrafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
-  var entries = Object.values(localDrafts);
-  if (entries.length === 0) { renderDashboard(); return; }
-  // Check which ones are not already on server
-  var toImport = entries.filter(function(d) { return !serverDrafts[d.meta.id]; });
-  if (toImport.length === 0) { localStorage.setItem('aar-imported', 'true'); renderDashboard(); return; }
-  // Import to server
-  var importDocs = toImport.map(function(d) { return { id: d.meta.id, meta: d.meta, state: d.state }; });
-  apiCall('import-documents', { body: { documents: importDocs } }).then(function() {
-    // Add to local cache with current user as owner
-    toImport.forEach(function(d) {
-      serverDrafts[d.meta.id] = {
-        id: d.meta.id,
-        meta: d.meta,
-        state: d.state,
-        owner_id: currentUser.id,
-        owner_username: currentUser.username,
-      };
-    });
-    localStorage.setItem('aar-imported', 'true');
-    showToast('Imported ' + toImport.length + ' local draft(s) to server', 'success');
+function maybeImportLocalData() {
+  var imported = false;
+  var promises = [];
+
+  // Import branding from localStorage → server (org-level)
+  if (!localStorage.getItem('aar-brand-imported')) {
+    var localBrand = null;
+    try { localBrand = JSON.parse(localStorage.getItem(BRAND_KEY)); } catch(e) {}
+    if (localBrand && Object.keys(localBrand).length > 0) {
+      promises.push(
+        apiCall('save-branding', { body: { branding: localBrand } }).then(function() {
+          brand = Object.assign({}, brand, localBrand);
+          applyBrandColors();
+          localStorage.setItem('aar-brand-imported', 'true');
+        }).catch(function() {})
+      );
+    } else {
+      localStorage.setItem('aar-brand-imported', 'true');
+    }
+  }
+
+  // Import documents from localStorage → server
+  if (!localStorage.getItem('aar-imported')) {
+    var localDrafts = {};
+    try { localDrafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
+    var entries = Object.values(localDrafts);
+    var toImport = entries.filter(function(d) { return d.meta && !serverDrafts[d.meta.id]; });
+    if (toImport.length > 0) {
+      var importDocs = toImport.map(function(d) { return { id: d.meta.id, meta: d.meta, state: d.state }; });
+      promises.push(
+        apiCall('import-documents', { body: { documents: importDocs } }).then(function() {
+          toImport.forEach(function(d) {
+            serverDrafts[d.meta.id] = {
+              id: d.meta.id, meta: d.meta, state: d.state,
+              owner_id: currentUser.id, owner_username: currentUser.username,
+            };
+          });
+          localStorage.setItem('aar-imported', 'true');
+          showToast('Imported ' + toImport.length + ' local draft(s)', 'success');
+        }).catch(function() {})
+      );
+    } else {
+      localStorage.setItem('aar-imported', 'true');
+    }
+  }
+
+  if (promises.length > 0) {
+    Promise.all(promises).then(function() { renderDashboard(); });
+  } else {
     renderDashboard();
-  }).catch(function() { renderDashboard(); });
+  }
 }
 
 // Close modals on overlay click
