@@ -276,10 +276,11 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
 <div id="authGate" style="position:fixed;inset:0;background:var(--primary);z-index:999;display:flex;align-items:center;justify-content:center;">
   <div style="background:var(--white);border-radius:16px;padding:40px;max-width:400px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
     <h1 style="font-size:24px;color:var(--primary);margin-bottom:8px;">&#9670; AAR Builder</h1>
-    <p style="font-size:14px;color:var(--gray-500);margin-bottom:24px;">Enter password to continue</p>
-    <input type="password" id="authPassword" placeholder="Password" style="width:100%;padding:12px 16px;border:2px solid var(--gray-300);border-radius:8px;font-size:16px;margin-bottom:16px;" onkeypress="if(event.key==='Enter')verifyAuth()">
+    <p style="font-size:14px;color:var(--gray-500);margin-bottom:24px;">Sign in to continue</p>
+    <input type="text" id="authUsername" placeholder="Username" autocomplete="username" style="width:100%;padding:12px 16px;border:2px solid var(--gray-300);border-radius:8px;font-size:16px;margin-bottom:12px;" onkeypress="if(event.key==='Enter')document.getElementById('authPassword').focus()">
+    <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password" style="width:100%;padding:12px 16px;border:2px solid var(--gray-300);border-radius:8px;font-size:16px;margin-bottom:16px;" onkeypress="if(event.key==='Enter')verifyAuth()">
     <button class="btn btn-primary btn-lg" style="width:100%;" onclick="verifyAuth()">Sign In</button>
-    <p id="authError" style="color:var(--red);font-size:13px;margin-top:12px;display:none;">Incorrect password</p>
+    <p id="authError" style="color:var(--red);font-size:13px;margin-top:12px;display:none;">Invalid username or password</p>
   </div>
 </div>
 
@@ -292,6 +293,8 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
     <button class="btn-header" id="headerHomeBtn" onclick="showDashboard()" title="Home">&#127968;</button>
     <button class="gear-btn" onclick="openFeedback()" title="Feedback">&#128172;</button>
     <button class="gear-btn" onclick="openSettings()" title="Settings">&#9881;</button>
+    <span id="headerUser" style="font-size:13px;opacity:0.8;margin-left:4px;"></span>
+    <button class="btn-header" id="headerLogout" onclick="logout()" title="Sign Out" style="font-size:13px;">Sign Out</button>
   </div>
 </header>
 
@@ -315,11 +318,12 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
     <!-- Dashboard -->
     <section class="step-panel active" id="dashboard">
       <div class="dashboard-header">
-        <h2>Your After-Action Reports</h2>
+        <h2>After-Action Reports</h2>
         <button class="btn btn-secondary btn-lg" onclick="document.getElementById('templateModal').classList.add('active')">+ New AAR</button>
       </div>
       <div class="dashboard-filters">
         <button class="active" data-filter="all" onclick="renderDashboard('all')">All</button>
+        <button data-filter="mine" onclick="renderDashboard('mine')">My AARs</button>
         <button data-filter="drafts" onclick="renderDashboard('drafts')">Drafts</button>
         <button data-filter="completed" onclick="renderDashboard('completed')">Completed</button>
       </div>
@@ -938,6 +942,7 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
       <button class="settings-tab" data-tab="formatting" onclick="switchSettingsTab('formatting')">Formatting</button>
       <button class="settings-tab" data-tab="longform" onclick="switchSettingsTab('longform')">Long Form</button>
       <button class="settings-tab" data-tab="shortform" onclick="switchSettingsTab('shortform')">Short Form</button>
+      <button class="settings-tab" data-tab="account" onclick="switchSettingsTab('account')">Account</button>
     </div>
 
     <!-- Branding Tab -->
@@ -1068,6 +1073,30 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
         <div style="font-size:13px; color:var(--gray-600); padding:12px; background:var(--gray-100); border-radius:8px;">
           1. Communications<br>2. Staffing<br>3. Patient Clinical and Support Services<br>4. Safety and Security<br>5. Resources and Assets<br>6. Utilities
         </div>
+      </div>
+    </div>
+
+    <!-- Account Tab -->
+    <div class="settings-panel" id="settingsPanel-account" style="display:none;">
+      <div class="form-card" style="padding:16px; margin-bottom:16px;">
+        <h3 style="font-size:14px; margin-bottom:12px;">Profile</h3>
+        <p style="font-size:13px; color:var(--gray-600); margin-bottom:8px;">Signed in as: <strong id="acctDisplayName"></strong> (<span id="acctUsername"></span>)</p>
+      </div>
+      <div class="form-card" style="padding:16px; margin-bottom:16px;">
+        <h3 style="font-size:14px; margin-bottom:12px;">Organization</h3>
+        <div class="form-group">
+          <label for="acctOrg">Current Organization</label>
+          <select id="acctOrg"></select>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="changeOrganization()">Switch Organization</button>
+      </div>
+      <div class="form-card" style="padding:16px;">
+        <h3 style="font-size:14px; margin-bottom:12px;">Change Password</h3>
+        <div class="form-group">
+          <label for="acctNewPassword">New Password</label>
+          <input type="password" id="acctNewPassword" placeholder="Enter new password">
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="changePassword()">Update Password</button>
       </div>
     </div>
 
@@ -1222,18 +1251,62 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
 
 <script>
 // ========================================
-// CHANGE 1: Auth verification
+// AUTH & SESSION
 // ========================================
+const SESSION_KEY = 'aar-session';
+let currentUser = null; // { id, username, displayName, orgId, orgName, token }
+let serverDrafts = {}; // id → { meta, state, owner_id, owner_username }
+
+function getSession() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(e) { return null; }
+}
+
+function saveSession(session) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+  currentUser = null;
+}
+
+function apiCall(action, opts) {
+  opts = opts || {};
+  var method = opts.method || (opts.body ? 'POST' : 'GET');
+  var url = '/api/data' + (method === 'GET' ? '?action=' + action + (opts.query || '') : '');
+  var body = method === 'POST' ? JSON.stringify(Object.assign({ action: action }, opts.body || {})) : undefined;
+  return fetch(url, {
+    method: method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + (currentUser ? currentUser.token : ''),
+    },
+    body: body,
+  }).then(function(r) {
+    if (r.status === 401) { clearSession(); location.reload(); throw new Error('Session expired'); }
+    return r.json();
+  });
+}
+
 function verifyAuth() {
+  var username = document.getElementById('authUsername').value.trim();
   var pw = document.getElementById('authPassword').value;
-  fetch('/api/verify', {
+  if (!username || !pw) {
+    document.getElementById('authError').style.display = 'block';
+    return;
+  }
+  fetch('/api/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: pw })
+    body: JSON.stringify({ username: username, password: pw })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.success) {
-      sessionStorage.setItem('aar-auth', 'true');
+      currentUser = data.user;
+      currentUser.token = data.token;
+      saveSession(currentUser);
+      if (data.branding) brand = Object.assign({}, brand, data.branding);
       document.getElementById('authGate').style.display = 'none';
+      document.getElementById('headerUser').textContent = currentUser.displayName;
       initApp();
     } else {
       document.getElementById('authError').style.display = 'block';
@@ -1244,6 +1317,18 @@ function verifyAuth() {
     document.getElementById('authError').textContent = 'Connection error';
     document.getElementById('authError').style.display = 'block';
   });
+}
+
+function logout() {
+  clearSession();
+  location.reload();
+}
+
+function restoreSession() {
+  var session = getSession();
+  if (!session || !session.token) return false;
+  currentUser = session;
+  return true;
 }
 
 // ========================================
@@ -1499,15 +1584,22 @@ function showDashboardNoHistory() {
   document.querySelector('.main-content').style.marginLeft = '0';
   document.querySelectorAll('.step-panel').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById('dashboard').classList.add('active');
-  // Highlight Home button
   var homeBtn = document.getElementById('headerHomeBtn');
   if (homeBtn) homeBtn.classList.add('active');
-  // CHANGE 2: Hide save/autosave on dashboard
   document.getElementById('headerSaveBtn').style.display = 'none';
   document.getElementById('autosaveIndicator').style.display = 'none';
-  // CHANGE 3: Non-scrollable dashboard
   document.body.classList.add('on-dashboard');
-  renderDashboard();
+  // Refresh documents from server when returning to dashboard
+  if (currentUser) {
+    apiCall('documents').then(function(data) {
+      var docs = (data && data.documents) || [];
+      serverDrafts = {};
+      docs.forEach(function(d) { serverDrafts[d.id] = d; });
+      renderDashboard();
+    }).catch(function() { renderDashboard(); });
+  } else {
+    renderDashboard();
+  }
 }
 
 function renderDashboard(filter) {
@@ -1516,9 +1608,8 @@ function renderDashboard(filter) {
   document.querySelectorAll('.dashboard-filters button').forEach(function(b) {
     b.classList.toggle('active', b.dataset.filter === filter);
   });
-  var drafts = {};
-  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
-  var entries = Object.values(drafts);
+  var entries = Object.values(serverDrafts);
+  if (filter === 'mine') entries = entries.filter(function(d) { return currentUser && d.owner_username === currentUser.username; });
   if (filter === 'drafts') entries = entries.filter(function(d) { return d.meta.status === 'draft'; });
   if (filter === 'completed') entries = entries.filter(function(d) { return d.meta.status === 'completed'; });
   entries.sort(function(a, b) { return (b.meta.updatedAt || 0) - (a.meta.updatedAt || 0); });
@@ -1531,25 +1622,40 @@ function renderDashboard(filter) {
     var dateStr = d.meta.eventDate ? formatDate(d.meta.eventDate) : '';
     var updated = d.meta.updatedAt ? new Date(d.meta.updatedAt).toLocaleDateString() : '';
     var templateLabel = d.meta.templateType === 'short' ? 'Short Form' : 'Long Form';
+    var isOwner = currentUser && d.owner_username === currentUser.username;
+    var ownerLabel = d.owner_username || 'unknown';
+    var deleteBtn = isOwner ? '<button class="aar-card-delete" onclick="event.stopPropagation();deleteDraft(\'' + d.meta.id + '\')" title="Delete">&times;</button>' : '';
     return '<div class="aar-card" onclick="openDraft(\'' + d.meta.id + '\')">' +
-      '<button class="aar-card-delete" onclick="event.stopPropagation();deleteDraft(\'' + d.meta.id + '\')" title="Delete">&times;</button>' +
+      deleteBtn +
       '<div class="aar-card-title">' + esc(d.meta.name || 'Untitled AAR') + '</div>' +
       '<div class="aar-card-meta"><span class="template-badge">' + templateLabel + '</span> &middot; ' + esc(d.meta.eventType || 'No type') + (dateStr ? ' &middot; ' + dateStr : '') + '</div>' +
       '<div class="aar-card-footer">' +
         '<span class="status-badge ' + d.meta.status + '">' + (d.meta.status === 'completed' ? 'Completed' : 'Draft') + '</span>' +
-        '<span style="font-size:12px;color:var(--gray-500);">' + (updated ? 'Updated ' + updated : '') + '</span>' +
+        '<span style="font-size:12px;color:var(--gray-500);">' + esc(ownerLabel) + (updated ? ' &middot; ' + updated : '') + '</span>' +
       '</div>' +
     '</div>';
   }).join('');
 }
 
 function openDraft(id) {
-  var drafts = {};
-  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
-  if (!drafts[id]) { showToast('Draft not found', 'error'); return; }
-  currentDraftId = id;
-  state = { ...getDefaultState(), ...drafts[id].state };
-  enterWizard();
+  if (!serverDrafts[id]) { showToast('Draft not found', 'error'); return; }
+  // If we have full state in cache, use it; otherwise fetch from server
+  if (serverDrafts[id].state) {
+    currentDraftId = id;
+    state = Object.assign({}, getDefaultState(), serverDrafts[id].state);
+    enterWizard();
+  } else {
+    apiCall('document', { query: '&id=' + encodeURIComponent(id) }).then(function(data) {
+      if (data.document) {
+        serverDrafts[id] = data.document;
+        currentDraftId = id;
+        state = Object.assign({}, getDefaultState(), data.document.state);
+        enterWizard();
+      } else {
+        showToast('Draft not found on server', 'error');
+      }
+    }).catch(function() { showToast('Failed to load draft', 'error'); });
+  }
 }
 
 function startNewAAR(templateType) {
@@ -1558,13 +1664,16 @@ function startNewAAR(templateType) {
   currentDraftId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   state = getDefaultState();
   state.templateType = templateType;
-  var drafts = {};
-  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
-  drafts[currentDraftId] = {
-    meta: { id: currentDraftId, name: '', status: 'draft', createdAt: Date.now(), updatedAt: Date.now(), eventType: '', eventDate: '', templateType: templateType },
-    state: JSON.parse(JSON.stringify(state))
+  var meta = { id: currentDraftId, name: '', status: 'draft', createdAt: Date.now(), updatedAt: Date.now(), eventType: '', eventDate: '', templateType: templateType };
+  serverDrafts[currentDraftId] = {
+    meta: meta,
+    state: JSON.parse(JSON.stringify(state)),
+    owner_id: currentUser ? currentUser.id : null,
+    owner_username: currentUser ? currentUser.username : 'unknown',
   };
-  localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(drafts));
+  // Save to server
+  apiCall('save-document', { body: { document: { id: currentDraftId, meta: meta, state: state } } })
+    .catch(function() { showToast('Failed to save to server', 'error'); });
   enterWizard();
 }
 
@@ -1639,12 +1748,12 @@ function enterWizard() {
 
 function deleteDraft(id) {
   if (!confirm('Delete this AAR? This cannot be undone.')) return;
-  var drafts = {};
-  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
-  delete drafts[id];
-  localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(drafts));
+  delete serverDrafts[id];
   renderDashboard();
-  showToast('AAR deleted', 'success');
+  apiCall('delete-document', { body: { id: id } }).then(function(data) {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast('AAR deleted', 'success');
+  }).catch(function() { showToast('Failed to delete on server', 'error'); });
 }
 
 // ========================================
@@ -2693,12 +2802,76 @@ function openSettings() {
   document.getElementById('secResourceGaps').checked = brand.sections ? brand.sections.resourceGaps !== false : true;
   document.getElementById('secCommIssues').checked = brand.sections ? brand.sections.commIssues !== false : true;
   document.getElementById('secAcronyms').checked = brand.sections ? brand.sections.acronyms !== false : true;
+  // Account tab
+  if (currentUser) {
+    document.getElementById('acctDisplayName').textContent = currentUser.displayName;
+    document.getElementById('acctUsername').textContent = currentUser.username;
+    // Populate org selector
+    var orgSelect = document.getElementById('acctOrg');
+    orgSelect.innerHTML = '';
+    apiCall('organizations').then(function(data) {
+      var orgs = (data && data.organizations) || [];
+      orgs.forEach(function(o) {
+        var opt = document.createElement('option');
+        opt.value = o.id;
+        opt.textContent = o.name;
+        if (currentUser.orgId === o.id) opt.selected = true;
+        orgSelect.appendChild(opt);
+      });
+    }).catch(function() {
+      var opt = document.createElement('option');
+      opt.value = currentUser.orgId;
+      opt.textContent = currentUser.orgName || 'Current Organization';
+      opt.selected = true;
+      orgSelect.appendChild(opt);
+    });
+  }
   // Reset to first tab
   switchSettingsTab('branding');
   document.getElementById('settingsModal').classList.add('active');
 }
 
 function closeSettings() { document.getElementById('settingsModal').classList.remove('active'); }
+
+function changeOrganization() {
+  var orgId = document.getElementById('acctOrg').value;
+  if (!orgId || orgId === currentUser.orgId) { showToast('Already in this organization', 'info'); return; }
+  apiCall('change-org', { body: { orgId: orgId } }).then(function(data) {
+    if (data.success && data.org) {
+      currentUser.orgId = data.org.id;
+      currentUser.orgName = data.org.name;
+      saveSession(currentUser);
+      if (data.org.branding) {
+        brand = Object.assign({}, brand, data.org.branding);
+        localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
+        applyBrandColors();
+      }
+      // Reload documents for new org
+      apiCall('documents').then(function(res) {
+        serverDrafts = {};
+        (res.documents || []).forEach(function(d) { serverDrafts[d.id] = d; });
+        renderDashboard();
+      });
+      showToast('Switched to ' + data.org.name, 'success');
+      closeSettings();
+    } else {
+      showToast('Failed to switch organization', 'error');
+    }
+  }).catch(function() { showToast('Failed to switch organization', 'error'); });
+}
+
+function changePassword() {
+  var np = document.getElementById('acctNewPassword').value.trim();
+  if (!np) { showToast('Enter a new password', 'error'); return; }
+  apiCall('change-password', { body: { newPassword: np } }).then(function(data) {
+    if (data.success) {
+      document.getElementById('acctNewPassword').value = '';
+      showToast('Password updated', 'success');
+    } else {
+      showToast('Failed to update password', 'error');
+    }
+  }).catch(function() { showToast('Failed to update password', 'error'); });
+}
 
 function applyBrandColors() {
   document.documentElement.style.setProperty('--primary', brand.primaryColor);
@@ -2730,7 +2903,14 @@ function saveSettings() {
   };
   localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
   applyBrandColors();
-  showToast('Settings saved', 'success');
+  // Save branding to server (org-level, shared across all accounts)
+  if (currentUser) {
+    apiCall('save-branding', { body: { branding: brand } })
+      .then(function() { showToast('Settings saved (synced to team)', 'success'); })
+      .catch(function() { showToast('Settings saved locally, sync failed', 'error'); });
+  } else {
+    showToast('Settings saved', 'success');
+  }
   closeSettings();
 }
 
@@ -2788,22 +2968,25 @@ function emailFeedback() {
 // ========================================
 // SAVE / LOAD / AUTOSAVE
 // ========================================
+var _serverSyncPending = false;
 function autoSave() {
   collectCurrentStepData();
-  localStorage.setItem(APP_KEY, JSON.stringify(state));
-  // Also save to V2 drafts if we have a current draft
-  if (currentDraftId) {
-    var drafts = {};
-    try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
-    if (drafts[currentDraftId]) {
-      drafts[currentDraftId].state = JSON.parse(JSON.stringify(state));
-      drafts[currentDraftId].meta.name = state.eventTitle || 'Untitled AAR';
-      drafts[currentDraftId].meta.eventType = state.eventType || '';
-      drafts[currentDraftId].meta.eventDate = state.eventDateStart || '';
-      drafts[currentDraftId].meta.templateType = state.templateType || 'long';
-      drafts[currentDraftId].meta.updatedAt = Date.now();
-      localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(drafts));
-    }
+  // Update local cache
+  if (currentDraftId && serverDrafts[currentDraftId]) {
+    serverDrafts[currentDraftId].state = JSON.parse(JSON.stringify(state));
+    serverDrafts[currentDraftId].meta.name = state.eventTitle || 'Untitled AAR';
+    serverDrafts[currentDraftId].meta.eventType = state.eventType || '';
+    serverDrafts[currentDraftId].meta.eventDate = state.eventDateStart || '';
+    serverDrafts[currentDraftId].meta.templateType = state.templateType || 'long';
+    serverDrafts[currentDraftId].meta.updatedAt = Date.now();
+  }
+  // Sync to server (debounced — only if not already pending)
+  if (currentDraftId && currentUser && !_serverSyncPending) {
+    _serverSyncPending = true;
+    var meta = serverDrafts[currentDraftId] ? serverDrafts[currentDraftId].meta : { id: currentDraftId, name: state.eventTitle || 'Untitled AAR', status: 'draft', createdAt: Date.now(), updatedAt: Date.now(), eventType: state.eventType || '', eventDate: state.eventDateStart || '', templateType: state.templateType || 'long' };
+    apiCall('save-document', { body: { document: { id: currentDraftId, meta: meta, state: state } } })
+      .then(function() { _serverSyncPending = false; })
+      .catch(function() { _serverSyncPending = false; });
   }
   var ind = document.getElementById('autosaveIndicator');
   ind.textContent = 'Saved ' + new Date().toLocaleTimeString();
@@ -2816,24 +2999,23 @@ function saveDraft() {
   if (!currentDraftId) {
     currentDraftId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   }
-  var drafts = {};
-  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
   var name = state.eventTitle || 'Untitled AAR';
-  drafts[currentDraftId] = {
-    meta: {
-      id: currentDraftId,
-      name: name,
-      status: (drafts[currentDraftId] && drafts[currentDraftId].meta.status) || 'draft',
-      createdAt: (drafts[currentDraftId] && drafts[currentDraftId].meta.createdAt) || Date.now(),
-      updatedAt: Date.now(),
-      eventType: state.eventType || '',
-      eventDate: state.eventDateStart || '',
-      templateType: state.templateType || 'long'
-    },
-    state: JSON.parse(JSON.stringify(state))
+  var existing = serverDrafts[currentDraftId] || {};
+  var meta = {
+    id: currentDraftId,
+    name: name,
+    status: (existing.meta && existing.meta.status) || 'draft',
+    createdAt: (existing.meta && existing.meta.createdAt) || Date.now(),
+    updatedAt: Date.now(),
+    eventType: state.eventType || '',
+    eventDate: state.eventDateStart || '',
+    templateType: state.templateType || 'long'
   };
-  localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(drafts));
-  showToast('Draft saved: ' + name, 'success');
+  serverDrafts[currentDraftId] = Object.assign({}, existing, { meta: meta, state: JSON.parse(JSON.stringify(state)) });
+  // Save to server
+  apiCall('save-document', { body: { document: { id: currentDraftId, meta: meta, state: state } } }).then(function() {
+    showToast('Saved: ' + name, 'success');
+  }).catch(function() { showToast('Saved locally, server sync failed', 'error'); });
 }
 
 function exportJSON() {
@@ -2853,6 +3035,8 @@ function importJSON(event) {
       if (data.state) state = { ...getDefaultState(), ...data.state };
       if (data.brand) brand = { ...brand, ...data.brand };
       localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
+      applyBrandColors();
+      if (currentUser) apiCall('save-branding', { body: { branding: brand } }).catch(function() {});
       if (state.templateType === 'short') {
         populateShortFormFields();
       } else {
@@ -2877,10 +3061,8 @@ function showCompletionPanel() {
     panel.style.display = 'block';
     var summary = esc(state.eventTitle || 'Untitled') + ' &middot; ' + state.findings.length + ' findings &middot; ' + state.timeline.length + ' timeline entries &middot; ' + state.correctiveActions.length + ' corrective actions';
     document.getElementById('completionSummaryS').innerHTML = summary;
-    // Update button state if already completed
-    var drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}');
     var btn = document.getElementById('markCompleteBtnS');
-    if (currentDraftId && drafts[currentDraftId] && drafts[currentDraftId].meta.status === 'completed') {
+    if (currentDraftId && serverDrafts[currentDraftId] && serverDrafts[currentDraftId].meta.status === 'completed') {
       btn.textContent = '\u2713 Completed';
       btn.classList.remove('btn-outline');
       btn.classList.add('btn-secondary');
@@ -2898,10 +3080,8 @@ function showCompletionPanel() {
     panel.style.display = 'block';
     var summary = esc(state.eventTitle || 'Untitled') + ' &middot; ' + state.participants.length + ' participants &middot; ' + state.objectives.length + ' objectives &middot; ' + state.actionItems.length + ' action items';
     document.getElementById('completionSummary').innerHTML = summary;
-    // Update button state if already completed
-    var drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}');
     var btn = document.getElementById('markCompleteBtn');
-    if (currentDraftId && drafts[currentDraftId] && drafts[currentDraftId].meta.status === 'completed') {
+    if (currentDraftId && serverDrafts[currentDraftId] && serverDrafts[currentDraftId].meta.status === 'completed') {
       btn.textContent = '\u2713 Completed';
       btn.classList.remove('btn-outline');
       btn.classList.add('btn-secondary');
@@ -2918,12 +3098,12 @@ function showCompletionPanel() {
 
 function markComplete() {
   if (!currentDraftId) return;
-  var drafts = {};
-  try { drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
-  if (drafts[currentDraftId]) {
-    drafts[currentDraftId].meta.status = 'completed';
-    drafts[currentDraftId].meta.updatedAt = Date.now();
-    localStorage.setItem(DRAFTS_KEY_V2, JSON.stringify(drafts));
+  if (serverDrafts[currentDraftId]) {
+    serverDrafts[currentDraftId].meta.status = 'completed';
+    serverDrafts[currentDraftId].meta.updatedAt = Date.now();
+    // Sync to server
+    apiCall('save-document', { body: { document: { id: currentDraftId, meta: serverDrafts[currentDraftId].meta, state: state } } })
+      .catch(function() { showToast('Failed to sync completion status', 'error'); });
     // Update both possible buttons
     var btn = document.getElementById('markCompleteBtn');
     if (btn) {
@@ -4113,11 +4293,12 @@ function showToast(msg, type) {
 }
 
 // ========================================
-// INITIALIZATION — CHANGE 1: Auth gate + initApp
+// INITIALIZATION — Auth gate + session restore + server fetch
 // ========================================
 window.addEventListener('DOMContentLoaded', function() {
-  if (sessionStorage.getItem('aar-auth') === 'true') {
+  if (restoreSession()) {
     document.getElementById('authGate').style.display = 'none';
+    document.getElementById('headerUser').textContent = currentUser.displayName;
     initApp();
   }
   // else: auth gate is visible, user must log in
@@ -4125,16 +4306,63 @@ window.addEventListener('DOMContentLoaded', function() {
 
 function initApp() {
   migrateDraftsV1toV2();
-  try {
-    var savedBrand = localStorage.getItem(BRAND_KEY);
-    if (savedBrand) brand = { ...brand, ...JSON.parse(savedBrand) };
-  } catch (e) {}
   applyBrandColors();
   populateFacilityOptions('eventFacility');
   populateFacilityOptions('sEventFacility');
-  // CHANGE 11: Set initial history state
   history.replaceState({ dashboard: true }, '');
-  showDashboardNoHistory();
+
+  if (currentUser) {
+    // Fetch branding and documents from server
+    Promise.all([
+      apiCall('branding').catch(function() { return {}; }),
+      apiCall('documents').catch(function() { return { documents: [] }; })
+    ]).then(function(results) {
+      // Apply server branding
+      if (results[0] && results[0].branding && Object.keys(results[0].branding).length) {
+        brand = Object.assign({}, brand, results[0].branding);
+        localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
+        applyBrandColors();
+      }
+      // Load documents into cache
+      var docs = (results[1] && results[1].documents) || [];
+      serverDrafts = {};
+      docs.forEach(function(d) {
+        serverDrafts[d.id] = d;
+      });
+      // Auto-import localStorage drafts if first server login (calls renderDashboard internally)
+      maybeImportLocalDrafts();
+    });
+  } else {
+    showDashboardNoHistory();
+  }
+}
+
+function maybeImportLocalDrafts() {
+  if (localStorage.getItem('aar-imported')) { renderDashboard(); return; }
+  var localDrafts = {};
+  try { localDrafts = JSON.parse(localStorage.getItem(DRAFTS_KEY_V2) || '{}'); } catch(e) {}
+  var entries = Object.values(localDrafts);
+  if (entries.length === 0) { renderDashboard(); return; }
+  // Check which ones are not already on server
+  var toImport = entries.filter(function(d) { return !serverDrafts[d.meta.id]; });
+  if (toImport.length === 0) { localStorage.setItem('aar-imported', 'true'); renderDashboard(); return; }
+  // Import to server
+  var importDocs = toImport.map(function(d) { return { id: d.meta.id, meta: d.meta, state: d.state }; });
+  apiCall('import-documents', { body: { documents: importDocs } }).then(function() {
+    // Add to local cache with current user as owner
+    toImport.forEach(function(d) {
+      serverDrafts[d.meta.id] = {
+        id: d.meta.id,
+        meta: d.meta,
+        state: d.state,
+        owner_id: currentUser.id,
+        owner_username: currentUser.username,
+      };
+    });
+    localStorage.setItem('aar-imported', 'true');
+    showToast('Imported ' + toImport.length + ' local draft(s) to server', 'success');
+    renderDashboard();
+  }).catch(function() { renderDashboard(); });
 }
 
 // Close modals on overlay click
