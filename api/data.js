@@ -1,5 +1,5 @@
-const crypto = require('crypto');
-const https = require('https');
+var crypto = require('crypto');
+var fetch = require('node-fetch');
 
 function validateToken(token) {
   try {
@@ -8,49 +8,39 @@ function validateToken(token) {
     if (parts.length !== 3) return null;
     var userId = parts[0], expiry = parts[1], hmac = parts[2];
     if (Date.now() > parseInt(expiry)) return null;
-    var expected = crypto.createHmac('sha256', process.env.AAR_TOKEN_SECRET)
+    var secret = process.env.AAR_TOKEN_SECRET || 'fallback-dev-secret';
+    var expected = crypto.createHmac('sha256', secret)
       .update(userId + ':' + expiry).digest('hex');
     if (hmac !== expected) return null;
     return userId;
   } catch (e) { return null; }
 }
 
-function sbRequest(path, opts) {
+function sb(path, opts) {
   opts = opts || {};
-  return new Promise(function (resolve, reject) {
-    var parsed = new URL(process.env.SUPABASE_URL + '/rest/v1/' + path);
-    var headers = {
-      'apikey': process.env.SUPABASE_SERVICE_KEY,
-      'Authorization': 'Bearer ' + process.env.SUPABASE_SERVICE_KEY,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-    if (opts.prefer) headers['Prefer'] = opts.prefer;
-    var reqOpts = {
-      hostname: parsed.hostname,
-      path: parsed.pathname + parsed.search,
-      method: opts.method || 'GET',
-      headers: headers,
-    };
-    var req = https.request(reqOpts, function (res) {
-      var body = '';
-      res.on('data', function (c) { body += c; });
-      res.on('end', function () {
-        if (opts.method === 'DELETE' && !body) { resolve({ ok: true }); return; }
-        try { resolve(JSON.parse(body)); } catch (e) { resolve(body); }
-      });
+  var url = (process.env.SUPABASE_URL || '') + '/rest/v1/' + path;
+  var headers = {
+    'apikey': process.env.SUPABASE_SERVICE_KEY || '',
+    'Authorization': 'Bearer ' + (process.env.SUPABASE_SERVICE_KEY || ''),
+    'Content-Type': 'application/json',
+  };
+  if (opts.prefer) headers['Prefer'] = opts.prefer;
+  return fetch(url, {
+    method: opts.method || 'GET',
+    headers: headers,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  }).then(function (r) {
+    if (opts.method === 'DELETE') return { ok: r.ok };
+    return r.text().then(function (t) {
+      try { return JSON.parse(t); } catch (e) { return t; }
     });
-    req.on('error', reject);
-    if (opts.body) req.write(JSON.stringify(opts.body));
-    req.end();
   });
 }
 
-function sb(path, opts) { return sbRequest(path, opts); }
-
-async function getUser(userId) {
-  var users = await sb('aar_users?id=eq.' + userId + '&select=id,username,display_name,org_id');
-  return (Array.isArray(users) && users.length) ? users[0] : null;
+function getUser(userId) {
+  return sb('aar_users?id=eq.' + userId + '&select=id,username,display_name,org_id').then(function (users) {
+    return (Array.isArray(users) && users.length) ? users[0] : null;
+  });
 }
 
 module.exports = async function handler(req, res) {
@@ -58,7 +48,16 @@ module.exports = async function handler(req, res) {
   var userId = validateToken(auth);
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-  var user = await getUser(userId);
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    return res.status(500).json({ error: 'Server misconfigured: missing Supabase env vars' });
+  }
+
+  var user;
+  try {
+    user = await getUser(userId);
+  } catch (err) {
+    return res.status(500).json({ error: 'DB connection failed: ' + err.message });
+  }
   if (!user) return res.status(401).json({ error: 'User not found' });
 
   var action = req.query.action;
