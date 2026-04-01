@@ -247,8 +247,10 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
 .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .status-badge.draft { background: #EBF4FF; color: var(--secondary); }
 .status-badge.completed { background: #C6F6D5; color: #22543D; }
-.aar-card-delete { background: none; border: none; color: var(--gray-400); cursor: pointer; font-size: 16px; padding: 4px 8px; border-radius: 4px; position: absolute; top: 12px; right: 12px; }
-.aar-card-delete:hover { background: #FED7D7; color: var(--red); }
+.aar-card-actions { position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; }
+.aar-card-action { background: none; border: none; color: var(--gray-400); cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 4px; }
+.aar-card-action:hover { background: var(--gray-200); color: var(--gray-700); }
+.aar-card-action.delete:hover { background: #FED7D7; color: var(--red); }
 .empty-state { text-align: center; padding: 60px 20px; color: var(--gray-500); }
 .empty-state-icon { font-size: 48px; margin-bottom: 16px; }
 /* Preview enhanced styles */
@@ -286,7 +288,7 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
 
 <!-- CHANGE 2: Header — cleaned up, no export/import buttons, icon-only home, save has id -->
 <header class="app-header">
-  <h1 style="color:var(--white);">&#9670; AAR Builder</h1>
+  <h1 style="color:var(--white);cursor:pointer;" onclick="showDashboard()">&#9670; AAR Builder</h1>
   <div class="header-actions">
     <div class="autosave-indicator" id="autosaveIndicator" style="display:none;">Auto-saved</div>
     <button class="btn-header" id="headerSaveBtn" style="display:none;" onclick="saveDraft()">&#128190; Save</button>
@@ -1620,9 +1622,12 @@ function renderDashboard(filter) {
     var templateLabel = d.meta.templateType === 'short' ? 'Short Form' : 'Long Form';
     var isOwner = currentUser && d.owner_username === currentUser.username;
     var ownerLabel = d.owner_username || 'unknown';
-    var deleteBtn = isOwner ? '<button class="aar-card-delete" onclick="event.stopPropagation();deleteDraft(\'' + d.meta.id + '\')" title="Delete">&times;</button>' : '';
+    var actions = '<div class="aar-card-actions">' +
+      '<button class="aar-card-action" onclick="event.stopPropagation();cloneDraft(\'' + d.meta.id + '\')" title="Clone as template">&#128203;</button>' +
+      (isOwner ? '<button class="aar-card-action delete" onclick="event.stopPropagation();deleteDraft(\'' + d.meta.id + '\')" title="Delete">&times;</button>' : '') +
+      '</div>';
     return '<div class="aar-card" onclick="openDraft(\'' + d.meta.id + '\')">' +
-      deleteBtn +
+      actions +
       '<div class="aar-card-title">' + esc(d.meta.name || 'Untitled AAR') + '</div>' +
       '<div class="aar-card-meta"><span class="template-badge">' + templateLabel + '</span> &middot; ' + esc(d.meta.eventType || 'No type') + (dateStr ? ' &middot; ' + dateStr : '') + '</div>' +
       '<div class="aar-card-footer">' +
@@ -1750,6 +1755,60 @@ function deleteDraft(id) {
     if (data.error) { showToast(data.error, 'error'); return; }
     showToast('AAR deleted', 'success');
   }).catch(function() { showToast('Failed to delete on server', 'error'); });
+}
+
+function cloneDraft(id) {
+  var source = serverDrafts[id];
+  if (!source) { showToast('Draft not found', 'error'); return; }
+  // Fetch full state if not cached
+  var doClone = function(srcState) {
+    var newId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    var cloned = JSON.parse(JSON.stringify(srcState));
+    // Keep substantive content, clear event-specific fields
+    cloned.eventTitle = (cloned.eventTitle || '') + ' (Copy)';
+    cloned.eventDateStart = '';
+    cloned.eventDateEnd = '';
+    cloned.eventTime = '';
+    cloned.drillDuration = '';
+    var meta = {
+      id: newId,
+      name: cloned.eventTitle,
+      status: 'draft',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      eventType: cloned.eventType || '',
+      eventDate: '',
+      templateType: cloned.templateType || 'long',
+    };
+    // Reset action item statuses to not started
+    if (cloned.actionItems) {
+      cloned.actionItems.forEach(function(a) { a.status = 'Not Started'; a.dueDate = ''; });
+    }
+    if (cloned.correctiveActions) {
+      cloned.correctiveActions.forEach(function(a) { a.dueDate = ''; });
+    }
+    serverDrafts[newId] = {
+      id: newId, meta: meta, state: cloned,
+      owner_id: currentUser ? currentUser.id : null,
+      owner_username: currentUser ? currentUser.username : 'unknown',
+    };
+    apiCall('save-document', { body: { document: { id: newId, meta: meta, state: cloned } } })
+      .then(function() { showToast('Cloned: ' + cloned.eventTitle, 'success'); })
+      .catch(function() { showToast('Cloned locally, server sync failed', 'error'); });
+    renderDashboard();
+  };
+
+  if (source.state) {
+    doClone(source.state);
+  } else {
+    apiCall('document', { query: '&id=' + encodeURIComponent(id) }).then(function(data) {
+      if (data.document && data.document.state) {
+        doClone(data.document.state);
+      } else {
+        showToast('Could not load draft to clone', 'error');
+      }
+    }).catch(function() { showToast('Failed to load draft', 'error'); });
+  }
 }
 
 // ========================================
