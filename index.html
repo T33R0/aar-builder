@@ -993,12 +993,8 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
         <div class="form-group">
           <label for="fmtFont">Font Family</label>
           <select id="fmtFont">
-            <option value="Calibri">Calibri</option>
+            <option value="Avenir Next LT Pro">Avenir Next LT Pro</option>
             <option value="Arial">Arial</option>
-            <option value="Times New Roman">Times New Roman</option>
-            <option value="Helvetica">Helvetica</option>
-            <option value="Georgia">Georgia</option>
-            <option value="Cambria">Cambria</option>
           </select>
         </div>
         <div class="form-group">
@@ -1389,7 +1385,7 @@ let brand = {
   framework: 'fema',
   sections: { timeline: true, decisions: true, resourceGaps: true, commIssues: true, acronyms: true },
   formatting: {
-    fontFamily: 'Calibri',
+    fontFamily: 'Avenir Next LT Pro',
     bodyJustification: 'left',
     headerLeft: '{orgName}',
     headerRight: 'After-Action Report',
@@ -2788,7 +2784,7 @@ function openSettings() {
   }
   // Formatting tab
   var fmt = brand.formatting || {};
-  document.getElementById('fmtFont').value = fmt.fontFamily || 'Calibri';
+  document.getElementById('fmtFont').value = fmt.fontFamily || 'Avenir Next LT Pro';
   document.getElementById('fmtJustify').value = fmt.bodyJustification || 'left';
   document.getElementById('fmtHeaderLeft').value = fmt.headerLeft || '{orgName}';
   document.getElementById('fmtHeaderRight').value = fmt.headerRight || 'After-Action Report';
@@ -3413,7 +3409,7 @@ async function generateLongDOCX() {
     } = docx;
 
     // CHANGE 10: Formatting helpers
-    var fontName = (brand.formatting && brand.formatting.fontFamily) || 'Calibri';
+    var fontName = (brand.formatting && brand.formatting.fontFamily) || 'Avenir Next LT Pro';
     var bodyAlign = { left: AlignmentType.LEFT, both: AlignmentType.JUSTIFIED, center: AlignmentType.CENTER }[(brand.formatting && brand.formatting.bodyJustification) || 'left'] || AlignmentType.LEFT;
     var marginMap = { narrow: 720, normal: 1440, wide: 1800 };
     var marginVal = marginMap[(brand.formatting && brand.formatting.margins) || 'normal'] || 1440;
@@ -3837,7 +3833,7 @@ async function generateShortDOCX() {
     } = docx;
 
     // CHANGE 10: Formatting helpers
-    var fontName = (brand.formatting && brand.formatting.fontFamily) || 'Calibri';
+    var fontName = (brand.formatting && brand.formatting.fontFamily) || 'Avenir Next LT Pro';
     var bodyAlign = { left: AlignmentType.LEFT, both: AlignmentType.JUSTIFIED, center: AlignmentType.CENTER }[(brand.formatting && brand.formatting.bodyJustification) || 'left'] || AlignmentType.LEFT;
     var marginMap = { narrow: 720, normal: 1440, wide: 1800 };
     var marginVal = marginMap[(brand.formatting && brand.formatting.margins) || 'normal'] || 1440;
