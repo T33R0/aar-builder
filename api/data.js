@@ -24,8 +24,8 @@ function sb(path, opts) {
   var method = opts.method || 'GET';
   var bodyStr = opts.body ? JSON.stringify(opts.body) : null;
   var headers = {
-    'apikey': process.env.SUPABASE_SERVICE_KEY || '',
-    'Authorization': 'Bearer ' + (process.env.SUPABASE_SERVICE_KEY || ''),
+    'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    'Authorization': 'Bearer ' + (process.env.SUPABASE_SERVICE_ROLE_KEY || ''),
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
@@ -65,8 +65,8 @@ module.exports = async function handler(req, res) {
   var userId = validateToken(auth);
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
-    return res.status(500).json({ error: 'Server misconfigured: SUPABASE_URL or SUPABASE_SERVICE_KEY not set' });
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return res.status(500).json({ error: 'Server misconfigured: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set' });
   }
 
   var user;
