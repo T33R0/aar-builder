@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const https = require('https');
 
 function hashPassword(pw) {
   return crypto.createHash('sha256').update('aar-salt:' + pw).digest('hex');
@@ -11,16 +12,29 @@ function createToken(userId) {
   return Buffer.from(payload + ':' + hmac).toString('base64');
 }
 
-async function sbGet(path) {
-  const url = process.env.SUPABASE_URL + '/rest/v1/' + path;
-  const res = await fetch(url, {
-    headers: {
-      'apikey': process.env.SUPABASE_SERVICE_KEY,
-      'Authorization': 'Bearer ' + process.env.SUPABASE_SERVICE_KEY,
-      'Accept': 'application/json',
-    },
+function sbGet(path) {
+  return new Promise(function (resolve, reject) {
+    var parsed = new URL(process.env.SUPABASE_URL + '/rest/v1/' + path);
+    var opts = {
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: 'GET',
+      headers: {
+        'apikey': process.env.SUPABASE_SERVICE_KEY,
+        'Authorization': 'Bearer ' + process.env.SUPABASE_SERVICE_KEY,
+        'Accept': 'application/json',
+      },
+    };
+    var req = https.request(opts, function (res) {
+      var body = '';
+      res.on('data', function (c) { body += c; });
+      res.on('end', function () {
+        try { resolve(JSON.parse(body)); } catch (e) { resolve(body); }
+      });
+    });
+    req.on('error', reject);
+    req.end();
   });
-  return res.json();
 }
 
 module.exports = async function handler(req, res) {
@@ -34,13 +48,12 @@ module.exports = async function handler(req, res) {
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY || !process.env.AAR_TOKEN_SECRET) {
-    return res.status(500).json({ error: 'Server misconfigured' });
+    return res.status(500).json({ error: 'Server misconfigured: missing env vars' });
   }
 
   try {
     const hash = hashPassword(password);
 
-    // Query user (no join — simpler, avoids PostgREST embedding issues)
     const users = await sbGet(
       'aar_users?username=eq.' + encodeURIComponent(username) +
       '&password_hash=eq.' + hash +
@@ -53,7 +66,6 @@ module.exports = async function handler(req, res) {
 
     const user = users[0];
 
-    // Fetch org separately
     let org = null;
     if (user.org_id) {
       const orgs = await sbGet('aar_organizations?id=eq.' + user.org_id + '&select=id,name,branding');

@@ -1,41 +1,56 @@
 const crypto = require('crypto');
+const https = require('https');
 
 function validateToken(token) {
   try {
-    const decoded = Buffer.from(token, 'base64').toString();
-    const parts = decoded.split(':');
+    var decoded = Buffer.from(token, 'base64').toString();
+    var parts = decoded.split(':');
     if (parts.length !== 3) return null;
     var userId = parts[0], expiry = parts[1], hmac = parts[2];
     if (Date.now() > parseInt(expiry)) return null;
-    const expected = crypto.createHmac('sha256', process.env.AAR_TOKEN_SECRET)
+    var expected = crypto.createHmac('sha256', process.env.AAR_TOKEN_SECRET)
       .update(userId + ':' + expiry).digest('hex');
     if (hmac !== expected) return null;
     return userId;
   } catch (e) { return null; }
 }
 
-async function sb(path, opts) {
+function sbRequest(path, opts) {
   opts = opts || {};
-  var url = process.env.SUPABASE_URL + '/rest/v1/' + path;
-  var headers = {
-    'apikey': process.env.SUPABASE_SERVICE_KEY,
-    'Authorization': 'Bearer ' + process.env.SUPABASE_SERVICE_KEY,
-    'Content-Type': 'application/json',
-  };
-  if (opts.prefer) headers['Prefer'] = opts.prefer;
-  var res = await fetch(url, {
-    method: opts.method || 'GET',
-    headers: headers,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  return new Promise(function (resolve, reject) {
+    var parsed = new URL(process.env.SUPABASE_URL + '/rest/v1/' + path);
+    var headers = {
+      'apikey': process.env.SUPABASE_SERVICE_KEY,
+      'Authorization': 'Bearer ' + process.env.SUPABASE_SERVICE_KEY,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (opts.prefer) headers['Prefer'] = opts.prefer;
+    var reqOpts = {
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: opts.method || 'GET',
+      headers: headers,
+    };
+    var req = https.request(reqOpts, function (res) {
+      var body = '';
+      res.on('data', function (c) { body += c; });
+      res.on('end', function () {
+        if (opts.method === 'DELETE' && !body) { resolve({ ok: true }); return; }
+        try { resolve(JSON.parse(body)); } catch (e) { resolve(body); }
+      });
+    });
+    req.on('error', reject);
+    if (opts.body) req.write(JSON.stringify(opts.body));
+    req.end();
   });
-  if (opts.method === 'DELETE') return { ok: res.ok };
-  var text = await res.text();
-  try { return JSON.parse(text); } catch (e) { return text; }
 }
+
+function sb(path, opts) { return sbRequest(path, opts); }
 
 async function getUser(userId) {
   var users = await sb('aar_users?id=eq.' + userId + '&select=id,username,display_name,org_id');
-  return (users && users.length) ? users[0] : null;
+  return (Array.isArray(users) && users.length) ? users[0] : null;
 }
 
 module.exports = async function handler(req, res) {
@@ -51,13 +66,15 @@ module.exports = async function handler(req, res) {
   if (typeof body === 'string') try { body = JSON.parse(body); } catch (e) { body = {}; }
   if (req.method === 'POST' && body && body.action) action = body.action;
 
+  try {
+
   // === LIST DOCUMENTS (org-scoped) ===
   if (req.method === 'GET' && action === 'documents') {
     var docs = await sb(
       'aar_documents?org_id=eq.' + user.org_id +
       '&select=id,owner_id,owner_username,meta,created_at,updated_at&order=updated_at.desc'
     );
-    return res.json({ documents: docs || [] });
+    return res.json({ documents: Array.isArray(docs) ? docs : [] });
   }
 
   // === GET SINGLE DOCUMENT ===
@@ -65,7 +82,7 @@ module.exports = async function handler(req, res) {
     var docId = req.query.id;
     if (!docId) return res.status(400).json({ error: 'Missing id' });
     var docs = await sb('aar_documents?id=eq.' + encodeURIComponent(docId) + '&org_id=eq.' + user.org_id);
-    if (!docs || !docs.length) return res.status(404).json({ error: 'Not found' });
+    if (!Array.isArray(docs) || !docs.length) return res.status(404).json({ error: 'Not found' });
     return res.json({ document: docs[0] });
   }
 
@@ -74,7 +91,7 @@ module.exports = async function handler(req, res) {
     var doc = body.document;
     if (!doc || !doc.id) return res.status(400).json({ error: 'Missing document' });
     var existing = await sb('aar_documents?id=eq.' + encodeURIComponent(doc.id) + '&select=id,owner_id');
-    if (existing && existing.length) {
+    if (Array.isArray(existing) && existing.length) {
       await sb('aar_documents?id=eq.' + encodeURIComponent(doc.id), {
         method: 'PATCH',
         body: { meta: doc.meta, state: doc.state, updated_at: new Date().toISOString() },
@@ -102,7 +119,7 @@ module.exports = async function handler(req, res) {
     var docId = body.id;
     if (!docId) return res.status(400).json({ error: 'Missing id' });
     var docs = await sb('aar_documents?id=eq.' + encodeURIComponent(docId) + '&select=owner_id');
-    if (!docs || !docs.length) return res.status(404).json({ error: 'Not found' });
+    if (!Array.isArray(docs) || !docs.length) return res.status(404).json({ error: 'Not found' });
     if (docs[0].owner_id !== user.id) return res.status(403).json({ error: 'Only the owner can delete' });
     await sb('aar_documents?id=eq.' + encodeURIComponent(docId), { method: 'DELETE' });
     return res.json({ success: true });
@@ -111,7 +128,7 @@ module.exports = async function handler(req, res) {
   // === GET BRANDING ===
   if (req.method === 'GET' && action === 'branding') {
     var orgs = await sb('aar_organizations?id=eq.' + user.org_id + '&select=branding');
-    return res.json({ branding: (orgs && orgs[0]) ? orgs[0].branding : {} });
+    return res.json({ branding: (Array.isArray(orgs) && orgs[0]) ? orgs[0].branding : {} });
   }
 
   // === SAVE BRANDING (org-level) ===
@@ -128,7 +145,7 @@ module.exports = async function handler(req, res) {
   // === LIST ORGANIZATIONS ===
   if (req.method === 'GET' && action === 'organizations') {
     var orgs = await sb('aar_organizations?select=id,name&order=name');
-    return res.json({ organizations: orgs || [] });
+    return res.json({ organizations: Array.isArray(orgs) ? orgs : [] });
   }
 
   // === CHANGE ORGANIZATION ===
@@ -141,7 +158,7 @@ module.exports = async function handler(req, res) {
       prefer: 'return=minimal',
     });
     var orgs = await sb('aar_organizations?id=eq.' + orgId + '&select=id,name,branding');
-    var org = (orgs && orgs[0]) || null;
+    var org = (Array.isArray(orgs) && orgs[0]) || null;
     return res.json({ success: true, org: org });
   }
 
@@ -164,9 +181,8 @@ module.exports = async function handler(req, res) {
     if (!docs || !Array.isArray(docs)) return res.status(400).json({ error: 'Missing documents array' });
     for (var i = 0; i < docs.length; i++) {
       var d = docs[i];
-      // Check if already imported
       var exists = await sb('aar_documents?id=eq.' + encodeURIComponent(d.id) + '&select=id');
-      if (exists && exists.length) continue;
+      if (Array.isArray(exists) && exists.length) continue;
       await sb('aar_documents', {
         method: 'POST',
         body: {
@@ -184,4 +200,8 @@ module.exports = async function handler(req, res) {
   }
 
   return res.status(400).json({ error: 'Unknown action: ' + action });
+
+  } catch (err) {
+    return res.status(500).json({ error: 'Server error: ' + err.message });
+  }
 };
