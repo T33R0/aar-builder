@@ -271,6 +271,12 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
 .preview-strength { white-space: pre-wrap; margin: 0 0 14px; padding: 0 0 0 4px; }
 .preview-strength .strength-title { font-weight: 700; color: var(--primary); display: block; margin-bottom: 4px; }
 .preview-strength .strength-ref { font-size: 12px; color: var(--gray-600); font-style: italic; display: block; margin-top: 4px; }
+.step-panel .form-card > h3 { cursor: pointer; user-select: none; position: relative; padding-right: 28px; }
+.step-panel .form-card > h3::after { content: '\25BE'; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); transition: transform 0.2s ease; font-size: 14px; color: var(--gray-500); }
+.step-panel .form-card.collapsed > h3::after { transform: translateY(-50%) rotate(-90deg); }
+.step-panel .form-card.collapsed > *:not(h3) { display: none !important; }
+.ref-box { background: var(--gray-100); border: 1px dashed var(--gray-300); border-radius: 6px; padding: 10px 12px; font-size: 13px; color: var(--gray-700); min-height: 42px; white-space: pre-wrap; }
+.ref-box.empty { color: var(--gray-500); font-style: italic; }
 /* Template badge on dashboard cards */
 .template-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: var(--gray-200); color: var(--gray-600); }
 /* CHANGE 9: Settings tab CSS */
@@ -604,9 +610,19 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
           </div>
           <div class="form-group">
             <label for="actionLinkItem">Item *</label>
-            <select id="actionLinkItem">
+            <select id="actionLinkItem" onchange="refreshActionLinkRefs('action')">
               <option value="">Select type first...</option>
             </select>
+          </div>
+        </div>
+        <div class="form-row" id="actionLinkRefs" style="display:none;">
+          <div class="form-group">
+            <label>Reference — Recommendation / Description</label>
+            <div class="ref-box" id="actionRefRecommendation"></div>
+          </div>
+          <div class="form-group">
+            <label>Reference — Responsible Party</label>
+            <div class="ref-box" id="actionRefResponsible"></div>
           </div>
         </div>
         <div class="form-row">
@@ -1171,9 +1187,19 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
       </div>
       <div class="form-group">
         <label for="editALinkItem">Item *</label>
-        <select id="editALinkItem">
+        <select id="editALinkItem" onchange="refreshActionLinkRefs('edit')">
           <option value="">Select...</option>
         </select>
+      </div>
+    </div>
+    <div class="form-row" id="editALinkRefs" style="display:none;">
+      <div class="form-group">
+        <label>Reference — Recommendation / Description</label>
+        <div class="ref-box" id="editARefRecommendation"></div>
+      </div>
+      <div class="form-group">
+        <label>Reference — Responsible Party</label>
+        <div class="ref-box" id="editARefResponsible"></div>
       </div>
     </div>
     <div class="form-group">
@@ -2968,6 +2994,50 @@ function updateActionLinkItems(linkTypeId, linkItemId) {
     itemSel.value = preserved;
     delete itemSel.dataset.pendingValue;
   }
+  var prefix = linkTypeId === 'editALinkType' ? 'edit' : 'action';
+  refreshActionLinkRefs(prefix);
+}
+
+function refreshActionLinkRefs(prefix) {
+  var isEdit = prefix === 'edit';
+  var typeId = isEdit ? 'editALinkType' : 'actionLinkType';
+  var itemId = isEdit ? 'editALinkItem' : 'actionLinkItem';
+  var refContainerId = isEdit ? 'editALinkRefs' : 'actionLinkRefs';
+  var recId = isEdit ? 'editARefRecommendation' : 'actionRefRecommendation';
+  var respId = isEdit ? 'editARefResponsible' : 'actionRefResponsible';
+
+  var typeSel = document.getElementById(typeId);
+  var itemSel = document.getElementById(itemId);
+  var container = document.getElementById(refContainerId);
+  var recBox = document.getElementById(recId);
+  var respBox = document.getElementById(respId);
+  if (!typeSel || !itemSel || !container || !recBox || !respBox) return;
+
+  var type = typeSel.value;
+  var idx = itemSel.value;
+  if (!type || idx === '') {
+    container.style.display = 'none';
+    return;
+  }
+  var rec = '', resp = '';
+  if (type === 'improvement') {
+    var imp = state.improvements[parseInt(idx)];
+    if (imp) {
+      rec = imp.recommendation || '';
+      resp = imp.responsibleParty || '';
+    }
+  } else if (type === 'strength') {
+    var s = state.strengths[parseInt(idx)];
+    if (s) {
+      rec = s.description || '';
+      resp = '(not applicable for strengths)';
+    }
+  }
+  recBox.textContent = rec || '(no recommendation provided)';
+  recBox.classList.toggle('empty', !rec);
+  respBox.textContent = resp || '(no responsible party assigned)';
+  respBox.classList.toggle('empty', !resp);
+  container.style.display = '';
 }
 
 function addActionItem(data) {
@@ -3833,8 +3903,11 @@ async function generateLongDOCX() {
       return tc(text, { shading: primaryHex, fontColor: 'FFFFFF', bold: true, fontSize: 18, width: width });
     }
 
-    // Build sections array
-    var children = [];
+    // Build sections — split into main (portrait), action items (landscape), acronyms (portrait)
+    var mainChildren = [];
+    var actionChildren = [];
+    var acronymsChildren = [];
+    var children = mainChildren;
 
     // --- COVER PAGE ---
     children.push(new Paragraph({ spacing: { before: 1800 } }));
@@ -4124,8 +4197,8 @@ async function generateLongDOCX() {
       children.push(new Paragraph({ children: [new TextRun({ text: 'No participants were recorded.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
-    // --- APPENDIX B: ACTION ITEMS ---
-    children.push(new Paragraph({ children: [new PageBreak()] }));
+    // --- APPENDIX B: ACTION ITEMS (landscape section) ---
+    children = actionChildren;
     children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix B: Improvement Plan Tracking', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
     if (state.actionItems.length > 0) {
@@ -4152,9 +4225,9 @@ async function generateLongDOCX() {
       children.push(new Paragraph({ children: [new TextRun({ text: 'No action items were recorded.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
-    // --- APPENDIX C: ACRONYMS ---
+    // --- APPENDIX C: ACRONYMS (portrait section) ---
     if (brand.sections.acronyms) {
-      children.push(new Paragraph({ children: [new PageBreak()] }));
+      children = acronymsChildren;
       children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix C: Acronym List', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
       var acHeader = new TableRow({
@@ -4169,43 +4242,76 @@ async function generateLongDOCX() {
       children.push(new Table({ rows: [acHeader, ...acRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
     }
 
-    // --- BUILD FOOTER ---
-    var footerChildren = [];
-    if (showPageNumbers) {
-      footerChildren.push(new TextRun({ text: dateStr + '   |   Page ', size: 16, font: fontName, color: '718096' }));
-      footerChildren.push(new TextRun({ children: [PageNumber.CURRENT], size: 16, font: fontName, color: '718096' }));
-    } else {
-      footerChildren.push(new TextRun({ text: dateStr, size: 16, font: fontName, color: '718096' }));
+    // --- HEADER/FOOTER BUILDERS (fresh per section; docx elements cannot be shared) ---
+    function buildHeader() {
+      var hp = [];
+      if (draft) {
+        hp.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 60 },
+          children: [new TextRun({ text: 'DRAFT', size: 32, font: fontName, color: 'E53E3E', bold: true })],
+        }));
+      }
+      hp.push(new Paragraph({
+        children: [
+          new TextRun({ text: headerLeftText, size: 18, font: fontName, color: primaryHex, bold: true }),
+          new TextRun({ text: '\t' }),
+          new TextRun({ text: headerRightText, size: 18, font: fontName, color: '718096' }),
+        ],
+        tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
+      }));
+      return new Header({ children: hp });
+    }
+    function buildFooter() {
+      var fp = [];
+      if (draft) {
+        fp.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 60 },
+          children: [new TextRun({ text: 'DRAFT', size: 28, font: fontName, color: 'E53E3E', bold: true })],
+        }));
+      }
+      var fc = [];
+      if (showPageNumbers) {
+        fc.push(new TextRun({ text: dateStr + '   |   Page ', size: 16, font: fontName, color: '718096' }));
+        fc.push(new TextRun({ children: [PageNumber.CURRENT], size: 16, font: fontName, color: '718096' }));
+      } else {
+        fc.push(new TextRun({ text: dateStr, size: 16, font: fontName, color: '718096' }));
+      }
+      fp.push(new Paragraph({ alignment: AlignmentType.CENTER, children: fc }));
+      return new Footer({ children: fp });
     }
 
-    var headerParagraphs = [];
-    if (draft) {
-      headerParagraphs.push(new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 60 },
-        children: [new TextRun({ text: 'DRAFT', size: 32, font: fontName, color: 'E53E3E', bold: true })],
-      }));
+    function portraitSection(sectionChildren) {
+      return {
+        properties: {
+          page: {
+            size: { width: 12240, height: 15840 }, // Letter portrait
+            margin: { top: marginVal, right: marginVal, bottom: marginVal, left: marginVal },
+          },
+        },
+        headers: { default: buildHeader() },
+        footers: { default: buildFooter() },
+        children: sectionChildren,
+      };
     }
-    headerParagraphs.push(new Paragraph({
-      children: [
-        new TextRun({ text: headerLeftText, size: 18, font: fontName, color: primaryHex, bold: true }),
-        new TextRun({ text: '\t' }),
-        new TextRun({ text: headerRightText, size: 18, font: fontName, color: '718096' }),
-      ],
-      tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
-    }));
+    function landscapeSection(sectionChildren) {
+      return {
+        properties: {
+          page: {
+            size: { width: 15840, height: 12240 }, // Letter landscape
+            margin: { top: marginVal, right: marginVal, bottom: marginVal, left: marginVal },
+          },
+        },
+        headers: { default: buildHeader() },
+        footers: { default: buildFooter() },
+        children: sectionChildren,
+      };
+    }
 
-    var footerParagraphs = [new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: footerChildren,
-    })];
-    if (draft) {
-      footerParagraphs.unshift(new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 60 },
-        children: [new TextRun({ text: 'DRAFT', size: 28, font: fontName, color: 'E53E3E', bold: true })],
-      }));
-    }
+    var docSections = [portraitSection(mainChildren)];
+    if (actionChildren.length > 0) docSections.push(landscapeSection(actionChildren));
+    if (acronymsChildren.length > 0) docSections.push(portraitSection(acronymsChildren));
 
     // --- BUILD DOCUMENT ---
     var doc = new Document({
@@ -4214,21 +4320,7 @@ async function generateLongDOCX() {
           document: { run: { font: fontName, size: 22 } },
         },
       },
-      sections: [{
-        properties: {
-          page: {
-            size: { width: 12240, height: 15840 }, // Letter
-            margin: { top: marginVal, right: marginVal, bottom: marginVal, left: marginVal },
-          },
-        },
-        headers: {
-          default: new Header({ children: headerParagraphs }),
-        },
-        footers: {
-          default: new Footer({ children: footerParagraphs }),
-        },
-        children: children,
-      }],
+      sections: docSections,
     });
 
     var blob = await Packer.toBlob(doc);
@@ -4755,6 +4847,12 @@ function initApp() {
   migrateDraftsV1toV2();
   applyBrandColors();
   populateFacilityOptions('sEventFacility');
+  document.addEventListener('click', function(e) {
+    var t = e.target;
+    if (t && t.tagName === 'H3' && t.parentElement && t.parentElement.classList.contains('form-card') && t.parentElement.closest('.step-panel')) {
+      t.parentElement.classList.toggle('collapsed');
+    }
+  });
   history.replaceState({ dashboard: true }, '');
 
   if (currentUser) {
