@@ -146,7 +146,10 @@ textarea { resize: vertical; min-height: 80px; }
 .toggle-slider::before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: var(--white); border-radius: 50%; transition: 0.3s; }
 .toggle-switch input:checked + .toggle-slider { background: var(--green); }
 .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
-.file-preview { margin-top: 10px; padding: 12px 18px; background: var(--gray-100); border-radius: 8px; font-size: 13px; color: var(--gray-700); max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; display: none; border-left: 3px solid var(--secondary); }
+.file-preview { margin-top: 10px; padding: 12px 18px; background: var(--gray-100); border-radius: 8px; font-size: 13px; color: var(--gray-700); display: none; border-left: 3px solid var(--secondary); }
+.file-preview textarea { width: 100%; min-height: 200px; max-height: 400px; resize: vertical; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; color: var(--gray-700); border: 1px solid var(--gray-300); border-radius: 6px; padding: 10px 12px; background: var(--white); line-height: 1.5; }
+.file-preview .hint { margin-top: 6px; font-size: 11px; color: var(--gray-500); display: flex; justify-content: space-between; align-items: center; }
+.file-preview .hint .saved { color: var(--green); }
 .file-preview.open { display: block; }
 .preview-toggle { background: none; border: none; color: var(--secondary); cursor: pointer; font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 4px; }
 .preview-toggle:hover { background: #EBF4FF; }
@@ -2738,7 +2741,7 @@ function handleFiles(files) {
       showToast('Unsupported file type: .' + ext, 'error');
       return;
     }
-    var entry = { id: genId(), name: file.name, type: ext, size: formatFileSize(file.size), text: '', mode: 'extract', extracting: true };
+    var entry = { id: genId(), name: file.name, type: ext, size: formatFileSize(file.size), text: '', mode: 'extract', orientation: 'portrait', extracting: true };
     state.uploadedFiles.push(entry);
     renderUploadedFiles();
     extractText(file, ext, entry.id);
@@ -2750,6 +2753,7 @@ function migrateUploadedFiles() {
   (state.uploadedFiles || []).forEach(function(f) {
     if (!f.id) f.id = genId();
     if (!f.mode) f.mode = (f.useAsRef === false) ? 'none' : 'extract';
+    if (!f.orientation) f.orientation = 'portrait';
   });
 }
 
@@ -2823,6 +2827,7 @@ function renderUploadedFiles() {
   if (state.uploadedFiles.length === 0) { container.innerHTML = ''; return; }
   container.innerHTML = state.uploadedFiles.map(function(f, i) {
     var isAppend = (f.mode === 'append' || f.mode === 'both');
+    var orient = f.orientation === 'landscape' ? 'landscape' : 'portrait';
     var appendNote = '';
     if (isAppend) {
       if (f.type === 'pdf' && fileBuffers.has(f.id)) {
@@ -2833,6 +2838,13 @@ function renderUploadedFiles() {
         appendNote = '<span style="font-size:11px; color:var(--gray-600);"> — Text appendix only</span>';
       }
     }
+    var orientationSelect = isAppend
+      ? '<select class="file-mode-select" title="Appendix orientation for this file" onchange="setFileOrientation(\'' + esc(f.id) + '\', this.value)">' +
+          '<option value="portrait"' + (orient === 'portrait' ? ' selected' : '') + '>Portrait</option>' +
+          '<option value="landscape"' + (orient === 'landscape' ? ' selected' : '') + '>Landscape</option>' +
+        '</select>'
+      : '';
+    var textBody = f.text || '';
     return '<div class="file-item">' +
       '<div class="file-icon ' + f.type + '">' + f.type.toUpperCase() + '</div>' +
       '<div class="file-info">' +
@@ -2840,18 +2852,45 @@ function renderUploadedFiles() {
         '<div class="file-meta">' + f.size + (f.extracting ? ' — Extracting text...' : '') + appendNote + '</div>' +
       '</div>' +
       '<div class="file-actions">' +
-        '<button class="preview-toggle" onclick="toggleFilePreview(' + i + ')">' + (f.extracting ? '...' : 'Preview') + '</button>' +
+        '<button class="preview-toggle" onclick="toggleFilePreview(' + i + ')">' + (f.extracting ? '...' : 'Edit text') + '</button>' +
         '<select class="file-mode-select" title="How to use this file" onchange="setFileMode(\'' + esc(f.id) + '\', this.value)">' +
           '<option value="extract"' + (f.mode === 'extract' ? ' selected' : '') + '>Extract text (reference)</option>' +
           '<option value="append"' + (f.mode === 'append' ? ' selected' : '') + '>Append to end</option>' +
           '<option value="both"' + (f.mode === 'both' ? ' selected' : '') + '>Extract + Append</option>' +
           '<option value="none"' + (f.mode === 'none' ? ' selected' : '') + '>Skip</option>' +
         '</select>' +
+        orientationSelect +
         '<button class="remove-item" onclick="removeFile(\'' + esc(f.id) + '\')" title="Remove">&times;</button>' +
       '</div>' +
     '</div>' +
-    '<div class="file-preview" id="filePreview' + i + '">' + esc(f.text || '') + '</div>';
+    '<div class="file-preview" id="filePreview' + i + '">' +
+      '<textarea data-file-id="' + esc(f.id) + '" placeholder="(No text extracted — type a transcript here if you want text included.)" oninput="onFileTextEdit(this)">' + esc(textBody) + '</textarea>' +
+      '<div class="hint"><span>Edits save automatically. Used for the reference panel and as the text fallback when an appended PDF page-embed isn\'t available.</span><span class="saved" id="filePreviewSaved_' + esc(f.id) + '"></span></div>' +
+    '</div>';
   }).join('');
+}
+
+function onFileTextEdit(ta) {
+  var id = ta.dataset.fileId;
+  var f = state.uploadedFiles.find(function(x) { return x.id === id; });
+  if (!f) return;
+  f.text = ta.value;
+  var savedEl = document.getElementById('filePreviewSaved_' + id);
+  if (savedEl) {
+    savedEl.textContent = '✓ Saved';
+    clearTimeout(onFileTextEdit._t);
+    onFileTextEdit._t = setTimeout(function() { savedEl.textContent = ''; }, 1200);
+  }
+  autoSave();
+  // Refresh side reference panel if user is in Step 4
+  if (currentStep === 4) updateReferencePanel();
+}
+
+function setFileOrientation(id, orientation) {
+  var f = state.uploadedFiles.find(function(x) { return x.id === id; });
+  if (!f) return;
+  f.orientation = orientation;
+  autoSave();
 }
 
 function toggleFilePreview(i) {
@@ -3327,6 +3366,7 @@ function addActionItem(data) {
     document.getElementById('actionNotes').value = '';
   }
   renderActionItems();
+  if (currentStep === 6) refreshPreview();
   autoSave();
 }
 
@@ -3986,34 +4026,35 @@ function refreshLongPreview() {
 
   html += '<hr class="preview-section-break">';
 
-  // Appendix A: Participants
-  html += '<h2>Appendix A: Participant List (' + state.participants.length + ')</h2>';
-  if (state.participants.length > 0) {
-    var showLocCol = state.eventLocations.length > 1;
-    html += '<table><tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title</th><th>Department</th><th>Email</th>' + (showLocCol ? '<th>Location(s)</th>' : '') + '</tr>';
-    state.participants.forEach(function(p, i) {
-      var locCell = showLocCol ? ('<td>' + esc(participantLocationsText(p) || 'All') + '</td>') : '';
-      html += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.firstName || '') + '</td><td>' + esc(p.lastName || '') + '</td><td>' + esc(p.title || '') + '</td><td>' + esc(p.department || '') + '</td><td>' + esc(p.email || '') + '</td>' + locCell + '</tr>';
-    });
-    html += '</table>';
-    if (showLocCol) {
-      state.eventLocations.forEach(function(l, li) {
-        var assigned = state.participants.filter(function(p) {
-          return !Array.isArray(p.locationIds) || p.locationIds.length === 0 || p.locationIds.indexOf(l.id) >= 0;
-        });
-        var nm = l.facility || l.address || ('Location ' + (li + 1));
-        var dateLbl = l.dateStart ? formatDate(l.dateStart) + (l.dateEnd && l.dateEnd !== l.dateStart ? ' – ' + formatDate(l.dateEnd) : '') : '';
-        html += '<h3>' + esc(nm) + (dateLbl ? ' — ' + esc(dateLbl) : '') + ' (' + assigned.length + ')</h3>';
-        if (assigned.length === 0) {
-          html += '<p style="color:var(--gray-500);">No participants assigned.</p>';
-        } else {
-          html += '<table><tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title</th><th>Department</th></tr>';
-          assigned.forEach(function(p, ai) {
-            html += '<tr><td>' + (ai + 1) + '</td><td>' + esc(p.firstName || '') + '</td><td>' + esc(p.lastName || '') + '</td><td>' + esc(p.title || '') + '</td><td>' + esc(p.department || '') + '</td></tr>';
-          });
-          html += '</table>';
-        }
+  // Appendix A: Participants — per-instance rosters when 2+ locations, else master list
+  var multiLoc = state.eventLocations.length > 1;
+  if (multiLoc) {
+    html += '<h2>Appendix A: Participants — Per-Location Rosters</h2>';
+    state.eventLocations.forEach(function(l, li) {
+      var assigned = state.participants.filter(function(p) {
+        return !Array.isArray(p.locationIds) || p.locationIds.length === 0 || p.locationIds.indexOf(l.id) >= 0;
       });
+      var nm = l.facility || l.address || ('Location ' + (li + 1));
+      var dateLbl = l.dateStart ? formatDate(l.dateStart) + (l.dateEnd && l.dateEnd !== l.dateStart ? ' – ' + formatDate(l.dateEnd) : '') : '';
+      html += '<h3>' + esc(nm) + (dateLbl ? ' — ' + esc(dateLbl) : '') + ' (' + assigned.length + ')</h3>';
+      if (assigned.length === 0) {
+        html += '<p style="color:var(--gray-500);">No participants assigned.</p>';
+      } else {
+        html += '<table><tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title</th><th>Department</th><th>Email</th></tr>';
+        assigned.forEach(function(p, ai) {
+          html += '<tr><td>' + (ai + 1) + '</td><td>' + esc(p.firstName || '') + '</td><td>' + esc(p.lastName || '') + '</td><td>' + esc(p.title || '') + '</td><td>' + esc(p.department || '') + '</td><td>' + esc(p.email || '') + '</td></tr>';
+        });
+        html += '</table>';
+      }
+    });
+  } else {
+    html += '<h2>Appendix A: Participant List (' + state.participants.length + ')</h2>';
+    if (state.participants.length > 0) {
+      html += '<table><tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title</th><th>Department</th><th>Email</th></tr>';
+      state.participants.forEach(function(p, i) {
+        html += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.firstName || '') + '</td><td>' + esc(p.lastName || '') + '</td><td>' + esc(p.title || '') + '</td><td>' + esc(p.department || '') + '</td><td>' + esc(p.email || '') + '</td></tr>';
+      });
+      html += '</table>';
     }
   }
 
@@ -4035,6 +4076,37 @@ function refreshLongPreview() {
       html += '<tr><td><strong>' + esc(pair[0]) + '</strong></td><td>' + esc(pair[1]) + '</td></tr>';
     });
     html += '</table>';
+  }
+
+  // Appendix D: Attached reference documents (preview summary)
+  var appendFilesPrev = state.uploadedFiles.filter(function(f) { return f.mode === 'append' || f.mode === 'both'; });
+  if (appendFilesPrev.length > 0) {
+    html += '<h2>Appendix D: Attached Reference Documents</h2>';
+    html += '<p style="font-size:13px; color:var(--gray-600);">These files will be attached to the end of the generated DOCX.</p>';
+    appendFilesPrev.forEach(function(f, i) {
+      var orient = (f.orientation === 'landscape') ? 'Landscape' : 'Portrait';
+      var embedNote = '';
+      if (f.type === 'pdf') {
+        embedNote = fileBuffers.has(f.id)
+          ? ' &middot; <span style="color:var(--green);">Pages will be embedded</span>'
+          : ' &middot; <span style="color:var(--orange);">Re-upload required for page embed (text fallback will be used)</span>';
+      } else {
+        embedNote = ' &middot; Text appendix only';
+      }
+      var pages = f.pageCount ? (f.pageCount + ' page' + (f.pageCount === 1 ? '' : 's')) : '';
+      html += '<h3>D.' + (i + 1) + ' — ' + esc(f.name) + '</h3>';
+      html += '<p style="font-size:13px; color:var(--gray-600); margin-top:-4px;">' +
+        f.type.toUpperCase() + ' &middot; ' + f.size +
+        (pages ? ' &middot; ' + pages : '') +
+        ' &middot; Orientation: ' + orient +
+        embedNote + '</p>';
+      var textExcerpt = (f.text || '').slice(0, 400);
+      if (textExcerpt.trim()) {
+        html += '<pre style="white-space:pre-wrap; font-size:12px; background:var(--gray-100); padding:10px 12px; border-left:3px solid var(--secondary); border-radius:4px; max-height:200px; overflow-y:auto;">' + esc(textExcerpt) + (f.text && f.text.length > 400 ? '…' : '') + '</pre>';
+      } else {
+        html += '<p style="font-size:12px; color:var(--gray-500); font-style:italic;">(No selectable text extracted — likely a scanned image. Edit the extracted text in Step 3 if you want a text transcript included.)</p>';
+      }
+    });
   }
 
   if (draft) html += '<div class="preview-draft-banner bottom">DRAFT</div>';
@@ -4182,11 +4254,14 @@ async function generateLongDOCX() {
       return tc(text, { shading: primaryHex, fontColor: 'FFFFFF', bold: true, fontSize: 18, width: width });
     }
 
-    // Build sections — split into main (portrait), action items (landscape), acronyms (portrait), appendix D (portrait)
-    var mainChildren = [];
-    var actionChildren = [];
-    var acronymsChildren = [];
-    var appendixDChildren = [];
+    // Build sections — cover/TOC/S1-S4 (portrait) + S5 Improvements (landscape) + S6/Appendix A (portrait)
+    // + Appendix B Action items (landscape) + Appendix C Acronyms (portrait) + Appendix D by-orientation groups
+    var mainChildren = [];        // portrait: cover through S4 Strengths
+    var improvementsChildren = []; // landscape: S5 Areas for Improvement
+    var contextChildren = [];      // portrait: S6 Additional Context + Appendix A
+    var actionChildren = [];       // landscape: Appendix B Improvement Plan Tracking
+    var acronymsChildren = [];     // portrait: Appendix C Acronyms
+    var appendixDGroups = [];      // ordered: [{orientation, children:[...]}, ...]
     var children = mainChildren;
 
     // --- COVER PAGE ---
@@ -4403,12 +4478,14 @@ async function generateLongDOCX() {
       children.push(new Paragraph({ children: [new TextRun({ text: 'No strengths were documented.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
-    // --- SECTION 5: AREAS FOR IMPROVEMENT ---
-    children.push(new Paragraph({ children: [new PageBreak()] }));
+    // --- SECTION 5: AREAS FOR IMPROVEMENT (landscape section) ---
+    children = improvementsChildren;
     children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 5: Areas for Improvement', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
     if (state.improvements.length > 0) {
       var impHeader = new TableRow({
+        tableHeader: true,
+        cantSplit: true,
         children: [thCell('#', 4), thCell('Title', 18), thCell('Area', 22), thCell('Objective(s)', 12), thCell('Recommendation', 18), thCell('Responsible', 14), thCell('Target Date', 12)],
       });
       var impRows = state.improvements.map(function(imp, i) {
@@ -4416,6 +4493,7 @@ async function generateLongDOCX() {
         var objRef = refNums.length > 0 ? refNums.map(function(r){ return 'Obj ' + r; }).join(', ') : '—';
         var shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
         return new TableRow({
+          cantSplit: true,
           children: [
             tc(String(i + 1), { shading: shade, fontSize: 18 }),
             tc(imp.title || '', { shading: shade, fontSize: 18, bold: true }),
@@ -4432,7 +4510,8 @@ async function generateLongDOCX() {
       children.push(new Paragraph({ children: [new TextRun({ text: 'No areas for improvement were documented.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
-    // --- SECTION 6: ADDITIONAL CONTEXT ---
+    // --- SECTION 6: ADDITIONAL CONTEXT (portrait section) ---
+    children = contextChildren;
     children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 6: Additional Context', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { before: 240, after: 120 } }));
 
     if (brand.sections.timeline && state.scenarioNarrative && state.scenarioNarrative.trim()) {
@@ -4457,33 +4536,14 @@ async function generateLongDOCX() {
     children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix A: Participant List', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
     if (state.participants.length > 0) {
-      var showLocCol = state.eventLocations.length > 1;
-      var pHeaderCells = showLocCol
-        ? [thCell('#', 5), thCell('First Name', 15), thCell('Last Name', 15), thCell('Title/Role', 18), thCell('Department', 15), thCell('Email', 17), thCell('Location(s)', 15)]
-        : [thCell('#', 6), thCell('First Name', 20), thCell('Last Name', 20), thCell('Title/Role', 22), thCell('Department', 16), thCell('Email', 16)];
-      var pHeader = new TableRow({ children: pHeaderCells });
-      var pRows = state.participants.map(function(p, i) {
-        var shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
-        var cells = [
-          tc(String(i + 1), { shading: shade, fontSize: 18 }),
-          tc(p.firstName || '', { shading: shade, fontSize: 18 }),
-          tc(p.lastName || '', { shading: shade, fontSize: 18 }),
-          tc(p.title || '', { shading: shade, fontSize: 18 }),
-          tc(p.department || '', { shading: shade, fontSize: 18 }),
-          tc(p.email || '', { shading: shade, fontSize: 18 }),
-        ];
-        if (showLocCol) cells.push(tc(participantLocationsText(p) || 'All', { shading: shade, fontSize: 18 }));
-        return new TableRow({ children: cells });
-      });
-      children.push(new Table({ rows: [pHeader, ...pRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
-
-      // Per-location rosters when 2+ locations
-      if (showLocCol) {
+      var multiLocDocx = state.eventLocations.length > 1;
+      if (multiLocDocx) {
+        // Per-location rosters only — no master list duplicate
         state.eventLocations.forEach(function(l, li) {
           var assigned = state.participants.filter(function(p) {
             return !Array.isArray(p.locationIds) || p.locationIds.length === 0 || p.locationIds.indexOf(l.id) >= 0;
           });
-          children.push(new Paragraph({ spacing: { before: 240 } }));
+          if (li > 0) children.push(new Paragraph({ spacing: { before: 200 } }));
           var nm = l.facility || l.address || ('Location ' + (li + 1));
           var dateLbl = l.dateStart ? formatDate(l.dateStart) + (l.dateEnd && l.dateEnd !== l.dateStart ? ' – ' + formatDate(l.dateEnd) : '') : '';
           children.push(new Paragraph({
@@ -4495,23 +4555,49 @@ async function generateLongDOCX() {
             children.push(new Paragraph({ children: [new TextRun({ text: 'No participants assigned to this location.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 100 } }));
           } else {
             var subHeader = new TableRow({
-              children: [thCell('#', 6), thCell('First Name', 23), thCell('Last Name', 23), thCell('Title/Role', 24), thCell('Department', 24)],
+              tableHeader: true,
+              cantSplit: true,
+              children: [thCell('#', 5), thCell('First Name', 18), thCell('Last Name', 18), thCell('Title/Role', 22), thCell('Department', 18), thCell('Email', 19)],
             });
             var subRows = assigned.map(function(p, ai) {
               var shade = ai % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
               return new TableRow({
+                cantSplit: true,
                 children: [
                   tc(String(ai + 1), { shading: shade, fontSize: 18 }),
                   tc(p.firstName || '', { shading: shade, fontSize: 18 }),
                   tc(p.lastName || '', { shading: shade, fontSize: 18 }),
                   tc(p.title || '', { shading: shade, fontSize: 18 }),
                   tc(p.department || '', { shading: shade, fontSize: 18 }),
+                  tc(p.email || '', { shading: shade, fontSize: 18 }),
                 ],
               });
             });
             children.push(new Table({ rows: [subHeader, ...subRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
           }
         });
+      } else {
+        // Single list (no location/date split needed)
+        var pHeader = new TableRow({
+          tableHeader: true,
+          cantSplit: true,
+          children: [thCell('#', 6), thCell('First Name', 20), thCell('Last Name', 20), thCell('Title/Role', 22), thCell('Department', 16), thCell('Email', 16)],
+        });
+        var pRows = state.participants.map(function(p, i) {
+          var shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+          return new TableRow({
+            cantSplit: true,
+            children: [
+              tc(String(i + 1), { shading: shade, fontSize: 18 }),
+              tc(p.firstName || '', { shading: shade, fontSize: 18 }),
+              tc(p.lastName || '', { shading: shade, fontSize: 18 }),
+              tc(p.title || '', { shading: shade, fontSize: 18 }),
+              tc(p.department || '', { shading: shade, fontSize: 18 }),
+              tc(p.email || '', { shading: shade, fontSize: 18 }),
+            ],
+          });
+        });
+        children.push(new Table({ rows: [pHeader, ...pRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
       }
     } else {
       children.push(new Paragraph({ children: [new TextRun({ text: 'No participants were recorded.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
@@ -4523,11 +4609,14 @@ async function generateLongDOCX() {
 
     if (state.actionItems.length > 0) {
       var aHeader = new TableRow({
+        tableHeader: true,
+        cantSplit: true,
         children: [thCell('#', 4), thCell('Linked Item', 18), thCell('Action', 22), thCell('Owner', 13), thCell('Due Date', 10), thCell('Priority', 9), thCell('Status', 11), thCell('Notes', 13)],
       });
       var aRows = state.actionItems.map(function(a, i) {
         var shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
         return new TableRow({
+          cantSplit: true,
           children: [
             tc(String(i + 1), { shading: shade, fontSize: 18 }),
             tc(getActionLinkLabel(a), { shading: shade, fontSize: 18 }),
@@ -4551,33 +4640,59 @@ async function generateLongDOCX() {
       children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix C: Acronym List', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
 
       var acHeader = new TableRow({
+        tableHeader: true,
+        cantSplit: true,
         children: [thCell('Acronym', 25), thCell('Definition', 75)],
       });
       var acRows = EM_ACRONYMS.map(function(pair, i) {
         var shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
         return new TableRow({
+          cantSplit: true,
           children: [tc(pair[0], { shading: shade, bold: true, fontSize: 20 }), tc(pair[1], { shading: shade, fontSize: 20 })],
         });
       });
       children.push(new Table({ rows: [acHeader, ...acRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
     }
 
-    // --- APPENDIX D: ATTACHED REFERENCE DOCUMENTS (its own portrait section) ---
+    // --- APPENDIX D: ATTACHED REFERENCE DOCUMENTS — grouped into portrait/landscape sections ---
     var appendFiles = state.uploadedFiles.filter(function(f) { return f.mode === 'append' || f.mode === 'both'; });
     if (appendFiles.length > 0) {
-      children = appendixDChildren;
-      children.push(new Paragraph({
-        heading: HeadingLevel.HEADING_1,
-        children: [new TextRun({ text: 'Appendix D: Attached Reference Documents', bold: true, color: primaryHex, font: fontName, size: 32 })],
-        spacing: { after: 160 }
-      }));
-      for (var fi = 0; fi < appendFiles.length; fi++) {
-        var f = appendFiles[fi];
-        if (fi > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
-        children.push(new Paragraph({
-          heading: HeadingLevel.HEADING_2,
-          children: [new TextRun({ text: 'D.' + (fi + 1) + ' — ' + f.name, bold: true, color: secondaryHex, font: fontName, size: 26 })],
-          spacing: { before: 160, after: 140 }
+      // Split consecutive runs of same orientation into groups so the ordering is preserved
+      var currentGroup = null;
+      appendFiles.forEach(function(f) {
+        var ori = (f.orientation === 'landscape') ? 'landscape' : 'portrait';
+        if (!currentGroup || currentGroup.orientation !== ori) {
+          currentGroup = { orientation: ori, files: [], children: [] };
+          appendixDGroups.push(currentGroup);
+        }
+        currentGroup.files.push(f);
+      });
+      // First group gets the "Appendix D" heading
+      var fiGlobal = 0;
+      for (var gi = 0; gi < appendixDGroups.length; gi++) {
+        var grp = appendixDGroups[gi];
+        children = grp.children;
+        if (gi === 0) {
+          children.push(new Paragraph({
+            heading: HeadingLevel.HEADING_1,
+            children: [new TextRun({ text: 'Appendix D: Attached Reference Documents', bold: true, color: primaryHex, font: fontName, size: 32 })],
+            spacing: { after: 160 }
+          }));
+        } else {
+          children.push(new Paragraph({
+            children: [new TextRun({ text: 'Appendix D (continued)', bold: true, color: primaryHex, font: fontName, size: 24 })],
+            spacing: { after: 120 }
+          }));
+        }
+        for (var li2 = 0; li2 < grp.files.length; li2++) {
+          var f = grp.files[li2];
+          var firstInGroup = li2 === 0;
+          if (!firstInGroup) children.push(new Paragraph({ children: [new PageBreak()] }));
+          fiGlobal++;
+          children.push(new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun({ text: 'D.' + fiGlobal + ' — ' + f.name, bold: true, color: secondaryHex, font: fontName, size: 26 })],
+            spacing: { before: 160, after: 140 }
         }));
 
         if (f.type === 'pdf' && fileBuffers.has(f.id) && window.pdfjsLib) {
@@ -4626,7 +4741,8 @@ async function generateLongDOCX() {
             if (para.trim()) children.push(new Paragraph({ children: [new TextRun({ text: para, size: 20, font: fontName })], spacing: { after: 80 } }));
           });
         }
-      }
+      } // end for li2 (files in group)
+      } // end for gi (appendix D groups)
     }
 
     // --- HEADER/FOOTER BUILDERS (fresh per section; docx elements cannot be shared) ---
@@ -4697,9 +4813,16 @@ async function generateLongDOCX() {
     }
 
     var docSections = [portraitSection(mainChildren)];
+    if (improvementsChildren.length > 0) docSections.push(landscapeSection(improvementsChildren));
+    if (contextChildren.length > 0) docSections.push(portraitSection(contextChildren));
     if (actionChildren.length > 0) docSections.push(landscapeSection(actionChildren));
     if (acronymsChildren.length > 0) docSections.push(portraitSection(acronymsChildren));
-    if (appendixDChildren.length > 0) docSections.push(portraitSection(appendixDChildren));
+    appendixDGroups.forEach(function(grp) {
+      if (grp.children.length > 0) {
+        if (grp.orientation === 'landscape') docSections.push(landscapeSection(grp.children));
+        else docSections.push(portraitSection(grp.children));
+      }
+    });
 
     // --- BUILD DOCUMENT ---
     var doc = new Document({
