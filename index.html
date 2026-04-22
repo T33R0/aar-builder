@@ -194,7 +194,17 @@ textarea { resize: vertical; min-height: 80px; }
 .generate-card p { font-size: 13px; color: var(--gray-600); }
 .generate-card .btn { margin-top: 16px; }
 /* Preview */
-.preview-container { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; padding: 32px; max-height: 600px; overflow-y: auto; }
+.preview-container { background: var(--gray-100); border: 1px solid var(--gray-200); border-radius: 12px; padding: 24px; max-height: 720px; overflow-y: auto; }
+.preview-page { background: var(--white); border: 1px solid var(--gray-300); box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin: 0 auto 24px auto; padding: 40px 44px; position: relative; }
+.preview-page.portrait { width: 100%; max-width: 850px; aspect-ratio: 8.5 / 11; min-height: 900px; }
+.preview-page.landscape { width: 100%; max-width: 1100px; aspect-ratio: 11 / 8.5; min-height: 700px; }
+.preview-page .page-label { position: absolute; top: 8px; right: 12px; font-size: 10px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; background: var(--gray-100); padding: 2px 8px; border-radius: 4px; }
+.preview-page .page-toc { list-style: none; padding: 0; margin: 12px 0 0 0; }
+.preview-page .page-toc li { padding: 6px 0; border-bottom: 1px dotted var(--gray-200); font-size: 14px; color: var(--primary); }
+.preview-page .preview-filler { margin-top: 80px; padding: 16px; text-align: center; font-size: 13px; font-style: italic; color: var(--gray-500); }
+.preview-page .preview-filler.bordered { border: 1px solid var(--gray-400); border-radius: 6px; padding: 24px; }
+.preview-page .pdf-page-img { display: block; margin: 8px auto; max-width: 100%; border: 1px solid var(--gray-300); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.preview-page .pdf-page-placeholder { margin: 8px auto; padding: 40px; text-align: center; color: var(--gray-500); font-size: 13px; background: var(--gray-100); border-radius: 6px; }
 .preview-container h1 { font-size: 24px; color: var(--primary); border-bottom: 3px solid var(--primary); padding-bottom: 10px; margin-bottom: 20px; }
 .preview-container h2 { font-size: 18px; color: var(--primary); margin: 24px 0 12px; }
 .preview-container h3 { font-size: 15px; color: var(--secondary); margin: 16px 0 8px; }
@@ -1102,6 +1112,27 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
           <input type="checkbox" id="fmtPageNumbers" checked> Show page numbers in footer
         </label>
       </div>
+
+      <div class="form-card" style="margin-top:16px; padding:16px;">
+        <h3 style="font-size:14px; margin-bottom:12px;">Intentionally-Blank Page Filler</h3>
+        <p style="font-size:12px; color:var(--gray-500); margin-bottom:10px;">When a section ends with blank space, this block is placed at the end of the section to signal "nothing is missing here." Applies to preview and generated DOCX.</p>
+        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+          <input type="checkbox" id="fmtPageFillerEnabled" onchange="updatePageFillerPreview()"> Enable filler block at end of each section
+        </label>
+        <div class="form-group">
+          <label for="fmtPageFillerText">Filler Text</label>
+          <input type="text" id="fmtPageFillerText" placeholder="Remainder of this page intentionally left blank." oninput="updatePageFillerPreview()">
+        </div>
+        <label style="text-transform:none; letter-spacing:0; font-weight:400; display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+          <input type="checkbox" id="fmtPageFillerBorder" onchange="updatePageFillerPreview()"> Draw a border around the filler block
+        </label>
+        <label style="font-size:11px; color:var(--gray-500); text-transform:none; letter-spacing:0;">Live preview on a sample blank page:</label>
+        <div id="fmtPageFillerSample" style="margin-top:8px; background:var(--white); border:1px solid var(--gray-300); border-radius:8px; padding:24px; min-height:220px; box-shadow:0 1px 3px rgba(0,0,0,0.04); position:relative;">
+          <span style="position:absolute; top:6px; right:10px; font-size:10px; color:var(--gray-400); text-transform:uppercase; letter-spacing:1.5px;">Sample</span>
+          <div style="height:80px; color:var(--gray-300); font-size:11px; display:flex; align-items:center;">…end of your section content…</div>
+          <div id="fmtPageFillerSampleBlock" class="preview-filler">Remainder of this page intentionally left blank.</div>
+        </div>
+      </div>
     </div>
 
     <!-- Long Form Tab -->
@@ -1459,6 +1490,8 @@ let currentDraftId = null;
 
 // In-memory only: raw PDF ArrayBuffers keyed by uploadedFile.id (not persisted to localStorage)
 var fileBuffers = (typeof fileBuffers !== 'undefined') ? fileBuffers : new Map();
+// In-memory only: cached data-URL PNGs of rendered PDF pages for the preview (keyed by file id)
+var filePreviewImages = (typeof filePreviewImages !== 'undefined') ? filePreviewImages : new Map(); // id -> { rotation, pages: string[] }
 
 function genId() {
   return 'id_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -1509,6 +1542,11 @@ let brand = {
     showPageNumbers: true,
     findingsLabel: 'letters',
     margins: 'normal',
+    pageFiller: {
+      enabled: false,
+      text: 'Remainder of this page intentionally left blank.',
+      border: true,
+    },
   }
 };
 
@@ -2741,7 +2779,7 @@ function handleFiles(files) {
       showToast('Unsupported file type: .' + ext, 'error');
       return;
     }
-    var entry = { id: genId(), name: file.name, type: ext, size: formatFileSize(file.size), text: '', mode: 'extract', orientation: 'portrait', extracting: true };
+    var entry = { id: genId(), name: file.name, type: ext, size: formatFileSize(file.size), text: '', mode: 'extract', orientation: 'portrait', rotation: 0, extracting: true };
     state.uploadedFiles.push(entry);
     renderUploadedFiles();
     extractText(file, ext, entry.id);
@@ -2754,6 +2792,7 @@ function migrateUploadedFiles() {
     if (!f.id) f.id = genId();
     if (!f.mode) f.mode = (f.useAsRef === false) ? 'none' : 'extract';
     if (!f.orientation) f.orientation = 'portrait';
+    if (f.rotation === undefined) f.rotation = 0;
   });
 }
 
@@ -2839,9 +2878,18 @@ function renderUploadedFiles() {
       }
     }
     var orientationSelect = isAppend
-      ? '<select class="file-mode-select" title="Appendix orientation for this file" onchange="setFileOrientation(\'' + esc(f.id) + '\', this.value)">' +
+      ? '<select class="file-mode-select" title="Appendix page orientation" onchange="setFileOrientation(\'' + esc(f.id) + '\', this.value)">' +
           '<option value="portrait"' + (orient === 'portrait' ? ' selected' : '') + '>Portrait</option>' +
           '<option value="landscape"' + (orient === 'landscape' ? ' selected' : '') + '>Landscape</option>' +
+        '</select>'
+      : '';
+    var rot = Number(f.rotation || 0);
+    var rotationSelect = (isAppend && f.type === 'pdf')
+      ? '<select class="file-mode-select" title="Rotate PDF pages (applied to embedded images)" onchange="setFileRotation(\'' + esc(f.id) + '\', parseInt(this.value))">' +
+          '<option value="0"' + (rot === 0 ? ' selected' : '') + '>Rotate 0°</option>' +
+          '<option value="90"' + (rot === 90 ? ' selected' : '') + '>Rotate 90°</option>' +
+          '<option value="180"' + (rot === 180 ? ' selected' : '') + '>Rotate 180°</option>' +
+          '<option value="270"' + (rot === 270 ? ' selected' : '') + '>Rotate 270°</option>' +
         '</select>'
       : '';
     var textBody = f.text || '';
@@ -2860,6 +2908,7 @@ function renderUploadedFiles() {
           '<option value="none"' + (f.mode === 'none' ? ' selected' : '') + '>Skip</option>' +
         '</select>' +
         orientationSelect +
+        rotationSelect +
         '<button class="remove-item" onclick="removeFile(\'' + esc(f.id) + '\')" title="Remove">&times;</button>' +
       '</div>' +
     '</div>' +
@@ -2890,6 +2939,18 @@ function setFileOrientation(id, orientation) {
   var f = state.uploadedFiles.find(function(x) { return x.id === id; });
   if (!f) return;
   f.orientation = orientation;
+  renderUploadedFiles();
+  if (currentStep === 6) refreshPreview();
+  autoSave();
+}
+
+function setFileRotation(id, rotation) {
+  var f = state.uploadedFiles.find(function(x) { return x.id === id; });
+  if (!f) return;
+  f.rotation = rotation;
+  filePreviewImages.delete(id); // force re-render with new rotation
+  renderUploadedFiles();
+  if (currentStep === 6) refreshPreview();
   autoSave();
 }
 
@@ -2908,6 +2969,7 @@ function setFileMode(id, mode) {
 function removeFile(id) {
   state.uploadedFiles = state.uploadedFiles.filter(function(f) { return f.id !== id; });
   fileBuffers.delete(id);
+  filePreviewImages.delete(id);
   renderUploadedFiles();
   autoSave();
 }
@@ -3475,6 +3537,11 @@ function openSettings() {
   document.getElementById('fmtMargins').value = fmt.margins || 'normal';
   document.getElementById('fmtFindings').value = fmt.findingsLabel || 'letters';
   document.getElementById('fmtPageNumbers').checked = fmt.showPageNumbers !== false;
+  var pfOpt = fmt.pageFiller || {};
+  document.getElementById('fmtPageFillerEnabled').checked = !!pfOpt.enabled;
+  document.getElementById('fmtPageFillerText').value = pfOpt.text || 'Remainder of this page intentionally left blank.';
+  document.getElementById('fmtPageFillerBorder').checked = pfOpt.border !== false;
+  updatePageFillerPreview();
   // Long Form tab
   document.getElementById('lfFramework').value = brand.framework || 'fema';
   document.getElementById('secTimeline').checked = brand.sections ? brand.sections.timeline !== false : true;
@@ -3558,6 +3625,20 @@ function applyBrandColors() {
   document.documentElement.style.setProperty('--secondary', brand.secondaryColor);
 }
 
+function updatePageFillerPreview() {
+  var enabled = document.getElementById('fmtPageFillerEnabled');
+  var textEl = document.getElementById('fmtPageFillerText');
+  var borderEl = document.getElementById('fmtPageFillerBorder');
+  var sampleBlock = document.getElementById('fmtPageFillerSampleBlock');
+  if (!sampleBlock) return;
+  var on = enabled && enabled.checked;
+  var text = (textEl && textEl.value) || 'Remainder of this page intentionally left blank.';
+  var bordered = borderEl && borderEl.checked;
+  sampleBlock.textContent = text;
+  sampleBlock.className = 'preview-filler' + (bordered ? ' bordered' : '');
+  sampleBlock.style.opacity = on ? '1' : '0.25';
+}
+
 function saveSettings() {
   brand.orgName = document.getElementById('brandOrgName').value.trim() || 'UCHealth';
   brand.primaryColor = document.getElementById('brandPrimaryColor').value;
@@ -3572,6 +3653,11 @@ function saveSettings() {
     showPageNumbers: document.getElementById('fmtPageNumbers').checked,
     findingsLabel: document.getElementById('fmtFindings').value,
     margins: document.getElementById('fmtMargins').value,
+    pageFiller: {
+      enabled: document.getElementById('fmtPageFillerEnabled').checked,
+      text: document.getElementById('fmtPageFillerText').value.trim() || 'Remainder of this page intentionally left blank.',
+      border: document.getElementById('fmtPageFillerBorder').checked,
+    },
   };
   brand.framework = document.getElementById('lfFramework').value;
   brand.sections = {
@@ -3928,15 +4014,57 @@ function refreshLongPreview() {
   var draft = isDraftDoc();
   var locationText = getLocationText();
 
+  // Content-presence flags (same as DOCX)
+  var hasExec = (state.purpose && state.purpose.trim()) || (state.scope && state.scope.trim());
+  var hasObjectives = state.objectives && state.objectives.length > 0;
+  var hasStrengths = state.strengths && state.strengths.length > 0;
+  var hasImprovements = state.improvements && state.improvements.length > 0;
+  var hasContext = (brand.sections.timeline && state.scenarioNarrative && state.scenarioNarrative.trim())
+               || (brand.sections.decisions && state.keyDecisions && state.keyDecisions.trim())
+               || (brand.sections.resourceGaps && state.resourceGaps && state.resourceGaps.trim())
+               || (brand.sections.commIssues && state.commIssues && state.commIssues.trim());
+  var hasParticipants = state.participants && state.participants.length > 0;
+  var hasActions = state.actionItems && state.actionItems.length > 0;
+  var hasAcronyms = !!brand.sections.acronyms;
+  var appendFilesPrev = state.uploadedFiles.filter(function(f) { return f.mode === 'append' || f.mode === 'both'; });
+  var hasAppD = appendFilesPrev.length > 0;
+
+  // Dynamic TOC list
+  var tocList = [];
+  if (hasExec) tocList.push('Section 1: Executive Summary');
+  tocList.push('Section 2: Exercise/Incident Overview');
+  if (hasObjectives) tocList.push('Section 3: Objectives and Performance');
+  if (hasStrengths) tocList.push('Section 4: Strengths');
+  if (hasImprovements) tocList.push('Section 5: Areas for Improvement');
+  if (hasContext) tocList.push('Section 6: Additional Context');
+  if (hasParticipants) tocList.push('Appendix A: Participant List');
+  if (hasActions) tocList.push('Appendix B: Improvement Plan Tracking');
+  if (hasAcronyms) tocList.push('Appendix C: Acronym List');
+  if (hasAppD) tocList.push('Appendix D: Attached Reference Documents');
+
+  // Filler block helper
+  var pf = (brand.formatting && brand.formatting.pageFiller) || { enabled: false, text: '', border: false };
+  function fillerBlock() {
+    if (!pf.enabled) return '';
+    var t = esc(pf.text || 'Remainder of this page intentionally left blank.');
+    return '<div class="preview-filler' + (pf.border ? ' bordered' : '') + '">' + t + '</div>';
+  }
+
+  function page(orientation, contents) {
+    var cls = 'preview-page ' + (orientation === 'landscape' ? 'landscape' : 'portrait');
+    var label = orientation === 'landscape' ? 'Landscape' : 'Portrait';
+    return '<section class="' + cls + '"><span class="page-label">' + label + '</span>' + contents + fillerBlock() + '</section>';
+  }
+
   var html = '';
 
-  if (draft) html += '<div class="preview-draft-banner">DRAFT</div>';
-
-  // Cover page card
-  html += '<div class="preview-cover">';
-  html += '<div class="org-name">' + esc(brand.orgName) + '</div>';
-  html += '<div class="event-title">' + esc(state.eventTitle || 'Untitled AAR') + '</div>';
-  html += '<div class="subtitle">After-Action Report</div>';
+  // --- COVER PAGE ---
+  var coverInner = '';
+  if (draft) coverInner += '<div class="preview-draft-banner">DRAFT</div>';
+  coverInner += '<div class="preview-cover">';
+  coverInner += '<div class="org-name">' + esc(brand.orgName) + '</div>';
+  coverInner += '<div class="event-title">' + esc(state.eventTitle || 'Untitled AAR') + '</div>';
+  coverInner += '<div class="subtitle">After-Action Report</div>';
   var coverDetails = [
     ['Event Type', state.eventType],
     ['Date(s)', dateStr],
@@ -3946,172 +4074,238 @@ function refreshLongPreview() {
   ];
   coverDetails.forEach(function(pair) {
     if (pair[1] && pair[1].trim()) {
-      html += '<div class="detail-line"><span class="detail-label">' + pair[0] + ':</span> ' + esc(pair[1]) + '</div>';
+      coverInner += '<div class="detail-line"><span class="detail-label">' + pair[0] + ':</span> ' + esc(pair[1]) + '</div>';
     }
   });
-  if (brand.fouo) html += '<div class="preview-fouo">FOR OFFICIAL USE ONLY</div>';
-  html += '</div>';
+  if (brand.fouo) coverInner += '<div class="preview-fouo">FOR OFFICIAL USE ONLY</div>';
+  coverInner += '</div>';
+  html += page('portrait', coverInner);
 
-  html += '<hr class="preview-section-break">';
+  // --- TABLE OF CONTENTS ---
+  var tocInner = '<h2>Table of Contents</h2><ul class="page-toc">';
+  tocList.forEach(function(entry) { tocInner += '<li>' + esc(entry) + '</li>'; });
+  tocInner += '</ul><p style="font-size:11px; color:var(--gray-500); margin-top:16px; font-style:italic;">In the downloaded DOCX, each entry links directly to its section.</p>';
+  html += page('portrait', tocInner);
 
-  // Section 1: Executive Summary
-  html += '<h2>Section 1: Executive Summary</h2>';
-  if (state.purpose) html += '<h3>Purpose</h3><p>' + esc(state.purpose) + '</p>';
-  if (state.scope) html += '<h3>Scope</h3><p>' + esc(state.scope) + '</p>';
+  // --- SECTION 1 (if present) ---
+  if (hasExec) {
+    var s1 = '<h2>Section 1: Executive Summary</h2>';
+    if (state.purpose && state.purpose.trim()) s1 += '<h3>Purpose</h3><p>' + esc(state.purpose) + '</p>';
+    if (state.scope && state.scope.trim()) s1 += '<h3>Scope</h3><p>' + esc(state.scope) + '</p>';
+    html += page('portrait', s1);
+  }
 
-  html += '<hr class="preview-section-break">';
+  // --- SECTION 2: OVERVIEW ---
+  var s2 = '<h2>Section 2: Exercise/Incident Overview</h2>';
+  s2 += '<table><tr><th>Field</th><th>Detail</th></tr>';
+  s2 += '<tr><td>Event Title</td><td>' + esc(state.eventTitle) + '</td></tr>';
+  s2 += '<tr><td>Event Type</td><td>' + esc(state.eventType) + '</td></tr>';
+  s2 += '<tr><td>Date(s)</td><td>' + dateStr + '</td></tr>';
+  s2 += '<tr><td>Location(s)</td><td>' + esc(locationText) + '</td></tr>';
+  s2 += '<tr><td>Sponsoring Org</td><td>' + esc(state.sponsorOrg) + '</td></tr>';
+  s2 += '<tr><td>Director</td><td>' + esc(state.directorName) + (state.directorTitle ? ', ' + esc(state.directorTitle) : '') + '</td></tr>';
+  s2 += '</table>';
+  if (state.overallAssessment) s2 += '<h3>Overall Assessment</h3><p>' + esc(state.overallAssessment) + '</p>';
+  html += page('portrait', s2);
 
-  // Section 2: Event Overview
-  html += '<h2>Section 2: Exercise/Incident Overview</h2>';
-  html += '<table><tr><th>Field</th><th>Detail</th></tr>';
-  html += '<tr><td>Event Title</td><td>' + esc(state.eventTitle) + '</td></tr>';
-  html += '<tr><td>Event Type</td><td>' + esc(state.eventType) + '</td></tr>';
-  html += '<tr><td>Date(s)</td><td>' + dateStr + '</td></tr>';
-  html += '<tr><td>Location(s)</td><td>' + esc(locationText) + '</td></tr>';
-  html += '<tr><td>Sponsoring Org</td><td>' + esc(state.sponsorOrg) + '</td></tr>';
-  html += '<tr><td>Director</td><td>' + esc(state.directorName) + (state.directorTitle ? ', ' + esc(state.directorTitle) : '') + '</td></tr>';
-  html += '</table>';
-  if (state.overallAssessment) html += '<h3>Overall Assessment</h3><p>' + esc(state.overallAssessment) + '</p>';
+  // --- SECTION 3: OBJECTIVES ---
+  if (hasObjectives) {
+    var s3 = '<h2>Section 3: Objectives and Performance</h2>';
+    state.objectives.forEach(function(obj, i) {
+      s3 += '<h3>Objective ' + (i + 1) + ': ' + esc(obj.description || 'Untitled') + '</h3>';
+      if (obj.coreCapability) s3 += '<p><strong>' + capLabel + ':</strong> ' + esc(obj.coreCapability) + '</p>';
+      if (obj.rating) s3 += '<p><strong>Rating:</strong> <span class="preview-badge ' + (ratingBadgeClass[obj.rating] || '') + '">' + obj.rating + ' — ' + (ratingLabels[obj.rating] || '') + '</span></p>';
+      if (obj.analysis) s3 += '<p>' + esc(obj.analysis) + '</p>';
+    });
+    html += page('portrait', s3);
+  }
 
-  html += '<hr class="preview-section-break">';
-
-  // Section 3: Objectives
-  html += '<h2>Section 3: Objectives and Performance</h2>';
-  if (state.objectives.length === 0) { html += '<p style="color:var(--gray-500);">No objectives entered.</p>'; }
-  state.objectives.forEach(function(obj, i) {
-    html += '<h3>Objective ' + (i + 1) + ': ' + esc(obj.description || 'Untitled') + '</h3>';
-    if (obj.coreCapability) html += '<p><strong>' + capLabel + ':</strong> ' + esc(obj.coreCapability) + '</p>';
-    if (obj.rating) html += '<p><strong>Rating:</strong> <span class="preview-badge ' + (ratingBadgeClass[obj.rating] || '') + '">' + obj.rating + ' — ' + (ratingLabels[obj.rating] || '') + '</span></p>';
-    if (obj.analysis) html += '<p>' + esc(obj.analysis) + '</p>';
-  });
-
-  html += '<hr class="preview-section-break">';
-
-  // Section 4: Strengths
-  html += '<h2>Section 4: Strengths</h2>';
-  if (state.strengths.length === 0) { html += '<p style="color:var(--gray-500);">No strengths entered.</p>'; }
-  else {
+  // --- SECTION 4: STRENGTHS ---
+  if (hasStrengths) {
+    var s4 = '<h2>Section 4: Strengths</h2>';
     state.strengths.forEach(function(s, si) {
       var objRefs = getRelatedObjectiveRefs(s);
       var refSuffix = objRefs.length > 0 ? '<span class="strength-ref">Related: ' + objRefs.map(function(r){ return 'Objective ' + r; }).join(', ') + '</span>' : '';
       var titleText = s.title && s.title.trim() ? esc(s.title) : 'Strength ' + (si + 1);
-      html += '<div class="preview-strength"><span class="strength-title">' + titleText + '</span>' + esc(s.description || '') + refSuffix + '</div>';
+      s4 += '<div class="preview-strength"><span class="strength-title">' + titleText + '</span>' + esc(s.description || '') + refSuffix + '</div>';
     });
+    html += page('portrait', s4);
   }
 
-  html += '<hr class="preview-section-break">';
-
-  // Section 5: Areas for Improvement
-  html += '<h2>Section 5: Areas for Improvement</h2>';
-  if (state.improvements.length > 0) {
-    html += '<table><tr><th>#</th><th>Title</th><th>Area</th><th>Objective(s)</th><th>Recommendation</th><th>Responsible</th><th>Target Date</th></tr>';
+  // --- SECTION 5: AREAS FOR IMPROVEMENT (landscape) ---
+  if (hasImprovements) {
+    var s5 = '<h2>Section 5: Areas for Improvement</h2>';
+    s5 += '<table><tr><th>#</th><th>Title</th><th>Area</th><th>Objective(s)</th><th>Recommendation</th><th>Responsible</th><th>Target Date</th></tr>';
     state.improvements.forEach(function(imp, i) {
       var objRefs = getRelatedObjectiveRefs(imp);
       var objLabel = objRefs.length > 0 ? objRefs.map(function(r){ return 'Obj ' + r; }).join(', ') : '—';
-      html += '<tr><td>' + (i + 1) + '</td><td>' + esc(imp.title || '') + '</td><td>' + esc(imp.area) + '</td><td>' + objLabel + '</td><td>' + esc(imp.recommendation) + '</td><td>' + esc(imp.responsibleParty) + '</td><td>' + (imp.targetDate ? formatDate(imp.targetDate) : '—') + '</td></tr>';
+      s5 += '<tr><td>' + (i + 1) + '</td><td>' + esc(imp.title || '') + '</td><td>' + esc(imp.area) + '</td><td>' + objLabel + '</td><td>' + esc(imp.recommendation) + '</td><td>' + esc(imp.responsibleParty) + '</td><td>' + (imp.targetDate ? formatDate(imp.targetDate) : '—') + '</td></tr>';
     });
-    html += '</table>';
-  } else { html += '<p style="color:var(--gray-500);">None entered.</p>'; }
+    s5 += '</table>';
+    html += page('landscape', s5);
+  }
 
-  html += '<hr class="preview-section-break">';
+  // --- SECTION 6: ADDITIONAL CONTEXT ---
+  if (hasContext) {
+    var s6 = '<h2>Section 6: Additional Context</h2>';
+    if (brand.sections.timeline && state.scenarioNarrative && state.scenarioNarrative.trim()) s6 += '<h3>Scenario Narrative</h3><p>' + esc(state.scenarioNarrative) + '</p>';
+    if (brand.sections.decisions && state.keyDecisions && state.keyDecisions.trim()) s6 += '<h3>Key Decisions Made</h3><p>' + esc(state.keyDecisions) + '</p>';
+    if (brand.sections.resourceGaps && state.resourceGaps && state.resourceGaps.trim()) s6 += '<h3>Resource Gaps Identified</h3><p>' + esc(state.resourceGaps) + '</p>';
+    if (brand.sections.commIssues && state.commIssues && state.commIssues.trim()) s6 += '<h3>Communication Issues</h3><p>' + esc(state.commIssues) + '</p>';
+    html += page('portrait', s6);
+  }
 
-  // Section 6: Additional Context
-  html += '<h2>Section 6: Additional Context</h2>';
-  var hasContext = false;
-  if (brand.sections.timeline && state.scenarioNarrative) { html += '<h3>Scenario Narrative</h3><p>' + esc(state.scenarioNarrative) + '</p>'; hasContext = true; }
-  if (brand.sections.decisions && state.keyDecisions) { html += '<h3>Key Decisions Made</h3><p>' + esc(state.keyDecisions) + '</p>'; hasContext = true; }
-  if (brand.sections.resourceGaps && state.resourceGaps) { html += '<h3>Resource Gaps Identified</h3><p>' + esc(state.resourceGaps) + '</p>'; hasContext = true; }
-  if (brand.sections.commIssues && state.commIssues) { html += '<h3>Communication Issues</h3><p>' + esc(state.commIssues) + '</p>'; hasContext = true; }
-  if (!hasContext) html += '<p style="color:var(--gray-500);">No additional context entered.</p>';
-
-  html += '<hr class="preview-section-break">';
-
-  // Appendix A: Participants — per-instance rosters when 2+ locations, else master list
-  var multiLoc = state.eventLocations.length > 1;
-  if (multiLoc) {
-    html += '<h2>Appendix A: Participants — Per-Location Rosters</h2>';
-    state.eventLocations.forEach(function(l, li) {
-      var assigned = state.participants.filter(function(p) {
-        return !Array.isArray(p.locationIds) || p.locationIds.length === 0 || p.locationIds.indexOf(l.id) >= 0;
-      });
-      var nm = l.facility || l.address || ('Location ' + (li + 1));
-      var dateLbl = l.dateStart ? formatDate(l.dateStart) + (l.dateEnd && l.dateEnd !== l.dateStart ? ' – ' + formatDate(l.dateEnd) : '') : '';
-      html += '<h3>' + esc(nm) + (dateLbl ? ' — ' + esc(dateLbl) : '') + ' (' + assigned.length + ')</h3>';
-      if (assigned.length === 0) {
-        html += '<p style="color:var(--gray-500);">No participants assigned.</p>';
-      } else {
-        html += '<table><tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title</th><th>Department</th><th>Email</th></tr>';
-        assigned.forEach(function(p, ai) {
-          html += '<tr><td>' + (ai + 1) + '</td><td>' + esc(p.firstName || '') + '</td><td>' + esc(p.lastName || '') + '</td><td>' + esc(p.title || '') + '</td><td>' + esc(p.department || '') + '</td><td>' + esc(p.email || '') + '</td></tr>';
+  // --- APPENDIX A: PARTICIPANTS ---
+  if (hasParticipants) {
+    var multiLoc = state.eventLocations.length > 1;
+    var aa = '';
+    if (multiLoc) {
+      aa += '<h2>Appendix A: Participants — Per-Location Rosters</h2>';
+      state.eventLocations.forEach(function(l, li) {
+        var assigned = state.participants.filter(function(p) {
+          return !Array.isArray(p.locationIds) || p.locationIds.length === 0 || p.locationIds.indexOf(l.id) >= 0;
         });
-        html += '</table>';
-      }
-    });
-  } else {
-    html += '<h2>Appendix A: Participant List (' + state.participants.length + ')</h2>';
-    if (state.participants.length > 0) {
-      html += '<table><tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title</th><th>Department</th><th>Email</th></tr>';
-      state.participants.forEach(function(p, i) {
-        html += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.firstName || '') + '</td><td>' + esc(p.lastName || '') + '</td><td>' + esc(p.title || '') + '</td><td>' + esc(p.department || '') + '</td><td>' + esc(p.email || '') + '</td></tr>';
+        var nm = l.facility || l.address || ('Location ' + (li + 1));
+        var dateLbl = l.dateStart ? formatDate(l.dateStart) + (l.dateEnd && l.dateEnd !== l.dateStart ? ' – ' + formatDate(l.dateEnd) : '') : '';
+        aa += '<h3>' + esc(nm) + (dateLbl ? ' — ' + esc(dateLbl) : '') + ' (' + assigned.length + ')</h3>';
+        if (assigned.length === 0) {
+          aa += '<p style="color:var(--gray-500);">No participants assigned.</p>';
+        } else {
+          aa += '<table><tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title</th><th>Department</th><th>Email</th></tr>';
+          assigned.forEach(function(p, ai) {
+            aa += '<tr><td>' + (ai + 1) + '</td><td>' + esc(p.firstName || '') + '</td><td>' + esc(p.lastName || '') + '</td><td>' + esc(p.title || '') + '</td><td>' + esc(p.department || '') + '</td><td>' + esc(p.email || '') + '</td></tr>';
+          });
+          aa += '</table>';
+        }
       });
-      html += '</table>';
+    } else {
+      aa += '<h2>Appendix A: Participant List (' + state.participants.length + ')</h2>';
+      aa += '<table><tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title</th><th>Department</th><th>Email</th></tr>';
+      state.participants.forEach(function(p, i) {
+        aa += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.firstName || '') + '</td><td>' + esc(p.lastName || '') + '</td><td>' + esc(p.title || '') + '</td><td>' + esc(p.department || '') + '</td><td>' + esc(p.email || '') + '</td></tr>';
+      });
+      aa += '</table>';
     }
+    html += page('portrait', aa);
   }
 
-  // Appendix B: Action Items
-  html += '<h2>Appendix B: Improvement Plan Tracking (' + state.actionItems.length + ')</h2>';
-  if (state.actionItems.length > 0) {
-    html += '<table><tr><th>#</th><th>Linked Item</th><th>Action</th><th>Owner</th><th>Due</th><th>Priority</th><th>Status</th><th>Notes</th></tr>';
+  // --- APPENDIX B: ACTION ITEMS (landscape) ---
+  if (hasActions) {
+    var ab = '<h2>Appendix B: Improvement Plan Tracking (' + state.actionItems.length + ')</h2>';
+    ab += '<table><tr><th>#</th><th>Linked Item</th><th>Action</th><th>Owner</th><th>Due</th><th>Priority</th><th>Status</th><th>Notes</th></tr>';
     state.actionItems.forEach(function(a, i) {
-      html += '<tr><td>' + (i + 1) + '</td><td>' + esc(getActionLinkLabel(a)) + '</td><td>' + esc(a.description) + '</td><td>' + esc(a.owner) + '</td><td>' + (a.dueDate ? formatDate(a.dueDate) : '—') + '</td><td>' + a.priority + '</td><td>' + a.status + '</td><td>' + esc(a.notes) + '</td></tr>';
+      ab += '<tr><td>' + (i + 1) + '</td><td>' + esc(getActionLinkLabel(a)) + '</td><td>' + esc(a.description) + '</td><td>' + esc(a.owner) + '</td><td>' + (a.dueDate ? formatDate(a.dueDate) : '—') + '</td><td>' + a.priority + '</td><td>' + a.status + '</td><td>' + esc(a.notes) + '</td></tr>';
     });
-    html += '</table>';
+    ab += '</table>';
+    html += page('landscape', ab);
   }
 
-  // Appendix C: Acronyms
-  if (brand.sections.acronyms) {
-    html += '<h2>Appendix C: Acronym List</h2>';
-    html += '<table><tr><th>Acronym</th><th>Definition</th></tr>';
+  // --- APPENDIX C: ACRONYMS ---
+  if (hasAcronyms) {
+    var ac = '<h2>Appendix C: Acronym List</h2>';
+    ac += '<table><tr><th>Acronym</th><th>Definition</th></tr>';
     EM_ACRONYMS.forEach(function(pair) {
-      html += '<tr><td><strong>' + esc(pair[0]) + '</strong></td><td>' + esc(pair[1]) + '</td></tr>';
+      ac += '<tr><td><strong>' + esc(pair[0]) + '</strong></td><td>' + esc(pair[1]) + '</td></tr>';
     });
-    html += '</table>';
+    ac += '</table>';
+    html += page('portrait', ac);
   }
 
-  // Appendix D: Attached reference documents (preview summary)
-  var appendFilesPrev = state.uploadedFiles.filter(function(f) { return f.mode === 'append' || f.mode === 'both'; });
-  if (appendFilesPrev.length > 0) {
-    html += '<h2>Appendix D: Attached Reference Documents</h2>';
-    html += '<p style="font-size:13px; color:var(--gray-600);">These files will be attached to the end of the generated DOCX.</p>';
+  // --- APPENDIX D: ATTACHED REFERENCE DOCUMENTS ---
+  if (hasAppD) {
     appendFilesPrev.forEach(function(f, i) {
-      var orient = (f.orientation === 'landscape') ? 'Landscape' : 'Portrait';
-      var embedNote = '';
-      if (f.type === 'pdf') {
-        embedNote = fileBuffers.has(f.id)
-          ? ' &middot; <span style="color:var(--green);">Pages will be embedded</span>'
-          : ' &middot; <span style="color:var(--orange);">Re-upload required for page embed (text fallback will be used)</span>';
-      } else {
-        embedNote = ' &middot; Text appendix only';
-      }
+      var orient = f.orientation === 'landscape' ? 'landscape' : 'portrait';
+      var rot = Number(f.rotation || 0);
       var pages = f.pageCount ? (f.pageCount + ' page' + (f.pageCount === 1 ? '' : 's')) : '';
-      html += '<h3>D.' + (i + 1) + ' — ' + esc(f.name) + '</h3>';
-      html += '<p style="font-size:13px; color:var(--gray-600); margin-top:-4px;">' +
+      var embedNote = f.type === 'pdf'
+        ? (fileBuffers.has(f.id) ? ' &middot; <span style="color:var(--green);">Pages embedded below</span>' : ' &middot; <span style="color:var(--orange);">Re-upload required for page embed</span>')
+        : ' &middot; Text appendix only';
+      var body = (i === 0 ? '<h2>Appendix D: Attached Reference Documents</h2>' : '');
+      body += '<h3>D.' + (i + 1) + ' — ' + esc(f.name) + '</h3>';
+      body += '<p style="font-size:13px; color:var(--gray-600); margin-top:-4px;">' +
         f.type.toUpperCase() + ' &middot; ' + f.size +
         (pages ? ' &middot; ' + pages : '') +
-        ' &middot; Orientation: ' + orient +
+        ' &middot; Orientation: ' + (orient === 'landscape' ? 'Landscape' : 'Portrait') +
+        (f.type === 'pdf' ? ' &middot; Rotation: ' + rot + '°' : '') +
         embedNote + '</p>';
-      var textExcerpt = (f.text || '').slice(0, 400);
-      if (textExcerpt.trim()) {
-        html += '<pre style="white-space:pre-wrap; font-size:12px; background:var(--gray-100); padding:10px 12px; border-left:3px solid var(--secondary); border-radius:4px; max-height:200px; overflow-y:auto;">' + esc(textExcerpt) + (f.text && f.text.length > 400 ? '…' : '') + '</pre>';
+      var hasBuffer = fileBuffers.has(f.id);
+      var cached = filePreviewImages.get(f.id);
+      var hasCachedImages = cached && cached.rotation === rot && cached.pages && cached.pages.length;
+      if (f.type === 'pdf' && (hasBuffer || hasCachedImages)) {
+        // Placeholders that async-fill with rendered page images (from buffer or cached data URLs)
+        var pageCount = f.pageCount || (hasCachedImages ? cached.pages.length : 1);
+        for (var p = 1; p <= pageCount; p++) {
+          body += '<div class="pdf-page-placeholder" data-pdf-id="' + esc(f.id) + '" data-pdf-page="' + p + '" data-pdf-rotation="' + rot + '">Rendering page ' + p + '…</div>';
+        }
+      } else if (f.text && f.text.trim()) {
+        var textExcerpt = f.text.slice(0, 1000);
+        body += '<pre style="white-space:pre-wrap; font-size:12px; background:var(--gray-100); padding:10px 12px; border-left:3px solid var(--secondary); border-radius:4px; max-height:340px; overflow-y:auto;">' + esc(textExcerpt) + (f.text.length > 1000 ? '…' : '') + '</pre>';
       } else {
-        html += '<p style="font-size:12px; color:var(--gray-500); font-style:italic;">(No selectable text extracted — likely a scanned image. Edit the extracted text in Step 3 if you want a text transcript included.)</p>';
+        body += '<p style="font-size:12px; color:var(--gray-500); font-style:italic;">(No selectable text extracted — likely a scanned image. Edit the extracted text in Step 3 if you want a text transcript included.)</p>';
       }
+      html += page(orient, body);
     });
   }
 
   if (draft) html += '<div class="preview-draft-banner bottom">DRAFT</div>';
 
   c.innerHTML = html;
+
+  // Async-render PDF page images into placeholders
+  renderPreviewPdfPages(c);
+}
+
+// Render each .pdf-page-placeholder into an <img> with the page rendered via pdf.js
+async function renderPreviewPdfPages(rootEl) {
+  var placeholders = rootEl.querySelectorAll('.pdf-page-placeholder');
+  if (!placeholders.length || !window.pdfjsLib) return;
+  // Group by file id to avoid loading the same PDF N times
+  var byId = {};
+  placeholders.forEach(function(el) {
+    var id = el.dataset.pdfId;
+    if (!byId[id]) byId[id] = [];
+    byId[id].push(el);
+  });
+  for (var id in byId) {
+    var f = state.uploadedFiles.find(function(x) { return x.id === id; });
+    if (!f) continue;
+    var rot = Number(f.rotation || 0);
+    var cached = filePreviewImages.get(id);
+    var needsRender = !cached || cached.rotation !== rot;
+    try {
+      if (needsRender && fileBuffers.has(id)) {
+        var pages = [];
+        var buf = fileBuffers.get(id);
+        var pdf = await window.pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+        for (var pn = 1; pn <= pdf.numPages; pn++) {
+          var page = await pdf.getPage(pn);
+          var vp = page.getViewport({ scale: 1.2, rotation: rot });
+          var canvas = document.createElement('canvas');
+          canvas.width = vp.width; canvas.height = vp.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+          pages.push(canvas.toDataURL('image/png'));
+        }
+        cached = { rotation: rot, pages: pages };
+        filePreviewImages.set(id, cached);
+      }
+      byId[id].forEach(function(el) {
+        var pn = parseInt(el.dataset.pdfPage);
+        var src = cached && cached.pages && cached.pages[pn - 1];
+        if (src) {
+          var img = document.createElement('img');
+          img.className = 'pdf-page-img';
+          img.src = src;
+          img.alt = 'Page ' + pn;
+          el.replaceWith(img);
+        } else {
+          el.textContent = 'Re-upload this PDF in the current session to render page ' + pn + '.';
+        }
+      });
+    } catch (err) {
+      console.error('Preview PDF render failed for', id, err);
+      byId[id].forEach(function(el) { el.textContent = 'Preview render failed: ' + err.message; });
+    }
+  }
 }
 
 // ========================================
@@ -4215,7 +4409,8 @@ async function generateLongDOCX() {
       Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
       HeadingLevel, AlignmentType, BorderStyle, WidthType, PageBreak,
       Header, Footer, PageNumber, NumberFormat, ImageRun, Tab, TabStopPosition, TabStopType,
-      ShadingType, TableLayoutType, VerticalAlign, convertInchesToTwip
+      ShadingType, TableLayoutType, VerticalAlign, convertInchesToTwip,
+      Bookmark, InternalHyperlink
     } = docx;
 
     // CHANGE 10: Formatting helpers
@@ -4331,44 +4526,80 @@ async function generateLongDOCX() {
 
     children.push(new Paragraph({ children: [new PageBreak()] }));
 
+    // --- CONTENT PRESENCE CHECKS (used to skip empty sections and build dynamic TOC) ---
+    var hasExec = (state.purpose && state.purpose.trim()) || (state.scope && state.scope.trim());
+    var hasObjectives = state.objectives && state.objectives.length > 0;
+    var hasStrengths = state.strengths && state.strengths.length > 0;
+    var hasImprovements = state.improvements && state.improvements.length > 0;
+    var hasContext = (brand.sections.timeline && state.scenarioNarrative && state.scenarioNarrative.trim())
+                 || (brand.sections.decisions && state.keyDecisions && state.keyDecisions.trim())
+                 || (brand.sections.resourceGaps && state.resourceGaps && state.resourceGaps.trim())
+                 || (brand.sections.commIssues && state.commIssues && state.commIssues.trim());
+    var hasParticipants = state.participants && state.participants.length > 0;
+    var hasActions = state.actionItems && state.actionItems.length > 0;
+    var hasAcronyms = !!brand.sections.acronyms;
+    var hasAppD = state.uploadedFiles.some(function(f) { return f.mode === 'append' || f.mode === 'both'; });
+
+    var tocList = [];
+    if (hasExec) tocList.push({ anchor: 'secExec', label: 'Section 1: Executive Summary' });
+    tocList.push({ anchor: 'secOverview', label: 'Section 2: Exercise/Incident Overview' });
+    if (hasObjectives) tocList.push({ anchor: 'secObjectives', label: 'Section 3: Objectives and Performance' });
+    if (hasStrengths) tocList.push({ anchor: 'secStrengths', label: 'Section 4: Strengths' });
+    if (hasImprovements) tocList.push({ anchor: 'secImprovements', label: 'Section 5: Areas for Improvement' });
+    if (hasContext) tocList.push({ anchor: 'secContext', label: 'Section 6: Additional Context' });
+    if (hasParticipants) tocList.push({ anchor: 'appA', label: 'Appendix A: Participant List' });
+    if (hasActions) tocList.push({ anchor: 'appB', label: 'Appendix B: Improvement Plan Tracking' });
+    if (hasAcronyms) tocList.push({ anchor: 'appC', label: 'Appendix C: Acronym List' });
+    if (hasAppD) tocList.push({ anchor: 'appD', label: 'Appendix D: Attached Reference Documents' });
+
+    // Helper to build a heading paragraph anchored with a Bookmark (for TOC hyperlinks)
+    function headingWithBookmark(anchor, text, opts) {
+      opts = opts || {};
+      return new Paragraph({
+        heading: opts.level || HeadingLevel.HEADING_1,
+        spacing: opts.spacing || { after: 120 },
+        children: [
+          new Bookmark({
+            id: anchor,
+            children: [new TextRun({ text: text, bold: true, color: opts.color || primaryHex, font: fontName, size: opts.size || 32 })],
+          }),
+        ],
+      });
+    }
+
     // --- TABLE OF CONTENTS ---
     children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Table of Contents', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 200 } }));
-
-    var tocEntries = [
-      'Section 1: Executive Summary',
-      'Section 2: Exercise/Incident Overview',
-      'Section 3: Objectives and Performance',
-      'Section 4: Strengths',
-      'Section 5: Areas for Improvement',
-      'Section 6: Additional Context',
-      'Appendix A: Participant List',
-      'Appendix B: Improvement Plan Tracking',
-    ];
-    if (brand.sections.acronyms) tocEntries.push('Appendix C: Acronym List');
-    tocEntries.forEach(function(entry) {
+    tocList.forEach(function(entry) {
       children.push(new Paragraph({
         spacing: { after: 60 },
-        children: [new TextRun({ text: entry, size: 22, font: fontName, color: secondaryHex })],
+        children: [
+          new InternalHyperlink({
+            anchor: entry.anchor,
+            children: [new TextRun({ text: entry.label, size: 22, font: fontName, color: secondaryHex, underline: {} })],
+          }),
+        ],
       }));
     });
 
     children.push(new Paragraph({ children: [new PageBreak()] }));
 
     // --- SECTION 1: EXECUTIVE SUMMARY ---
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 1: Executive Summary', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
+    if (hasExec) {
+      children.push(headingWithBookmark('secExec', 'Section 1: Executive Summary'));
 
-    if (state.purpose) {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Purpose', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
-      children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.purpose, size: 22, font: fontName })], spacing: { after: 120 } }));
-    }
-    if (state.scope) {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Scope', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
-      children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.scope, size: 22, font: fontName })], spacing: { after: 120 } }));
+      if (state.purpose && state.purpose.trim()) {
+        children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Purpose', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
+        children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.purpose, size: 22, font: fontName })], spacing: { after: 120 } }));
+      }
+      if (state.scope && state.scope.trim()) {
+        children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Scope', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
+        children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.scope, size: 22, font: fontName })], spacing: { after: 120 } }));
+      }
     }
 
     // --- SECTION 2: OVERVIEW ---
-    children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 2: Exercise/Incident Overview', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
+    if (hasExec) children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(headingWithBookmark('secOverview', 'Section 2: Exercise/Incident Overview'));
 
     var overviewData = [
       ['Event Title', state.eventTitle],
@@ -4398,10 +4629,11 @@ async function generateLongDOCX() {
     }
 
     // --- SECTION 3: OBJECTIVES ---
-    children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 3: Objectives and Performance', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
+    if (hasObjectives) {
+      children.push(new Paragraph({ children: [new PageBreak()] }));
+      children.push(headingWithBookmark('secObjectives', 'Section 3: Objectives and Performance'));
 
-    state.objectives.forEach(function(obj, i) {
+      state.objectives.forEach(function(obj, i) {
       children.push(new Paragraph({
         heading: HeadingLevel.HEADING_2,
         children: [new TextRun({ text: 'Objective ' + (i + 1) + ': ' + (obj.description || 'Untitled'), bold: true, color: secondaryHex, font: fontName, size: 26 })],
@@ -4435,16 +4667,14 @@ async function generateLongDOCX() {
         }));
         children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: obj.analysis, size: 22, font: fontName })], spacing: { after: 120 } }));
       }
-    });
-
-    if (state.objectives.length === 0) {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No objectives were documented.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
+      });
     }
 
     // --- SECTION 4: STRENGTHS ---
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 4: Strengths', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { before: 240, after: 120 } }));
+    if (hasStrengths) {
+      children.push(headingWithBookmark('secStrengths', 'Section 4: Strengths', { spacing: { before: 240, after: 120 } }));
 
-    state.strengths.forEach(function(s, si) {
+      state.strengths.forEach(function(s, si) {
       var refNums = getRelatedObjectiveRefs(s);
       var objRef = refNums.length > 0 ? ' [Objective ' + refNums.join(', ') + ']' : '';
       var titleText = s.title && s.title.trim() ? s.title : 'Strength ' + (si + 1);
@@ -4472,17 +4702,14 @@ async function generateLongDOCX() {
           spacing: { after: 120 },
         }));
       }
-    });
-
-    if (state.strengths.length === 0) {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No strengths were documented.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
+      });
     }
 
     // --- SECTION 5: AREAS FOR IMPROVEMENT (landscape section) ---
-    children = improvementsChildren;
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 5: Areas for Improvement', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
+    if (hasImprovements) {
+      children = improvementsChildren;
+      children.push(headingWithBookmark('secImprovements', 'Section 5: Areas for Improvement'));
 
-    if (state.improvements.length > 0) {
       var impHeader = new TableRow({
         tableHeader: true,
         cantSplit: true,
@@ -4506,13 +4733,12 @@ async function generateLongDOCX() {
         });
       });
       children.push(new Table({ rows: [impHeader, ...impRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
-    } else {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No areas for improvement were documented.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
     }
 
     // --- SECTION 6: ADDITIONAL CONTEXT (portrait section) ---
-    children = contextChildren;
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Section 6: Additional Context', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { before: 240, after: 120 } }));
+    if (hasContext) {
+      children = contextChildren;
+      children.push(headingWithBookmark('secContext', 'Section 6: Additional Context', { spacing: { before: 240, after: 120 } }));
 
     if (brand.sections.timeline && state.scenarioNarrative && state.scenarioNarrative.trim()) {
       children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Scenario Narrative', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
@@ -4530,12 +4756,15 @@ async function generateLongDOCX() {
       children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: 'Communication Issues', bold: true, color: secondaryHex, font: fontName, size: 26 })], spacing: { before: 160, after: 60 } }));
       children.push(new Paragraph({ alignment: bodyAlign, children: [new TextRun({ text: state.commIssues, size: 22, font: fontName })], spacing: { after: 120 } }));
     }
+    } // end hasContext
 
     // --- APPENDIX A: PARTICIPANTS ---
-    children.push(new Paragraph({ children: [new PageBreak()] }));
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix A: Participant List', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
+    if (hasParticipants) {
+      // Emit in contextChildren (portrait). If hasContext was false, contextChildren is still empty; it becomes a fresh portrait section carrying just Appendix A.
+      children = contextChildren;
+      if (hasContext) children.push(new Paragraph({ children: [new PageBreak()] }));
+      children.push(headingWithBookmark('appA', 'Appendix A: Participant List'));
 
-    if (state.participants.length > 0) {
       var multiLocDocx = state.eventLocations.length > 1;
       if (multiLocDocx) {
         // Per-location rosters only — no master list duplicate
@@ -4599,15 +4828,14 @@ async function generateLongDOCX() {
         });
         children.push(new Table({ rows: [pHeader, ...pRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
       }
-    } else {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No participants were recorded.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
-    }
+    } // end hasParticipants
 
     // --- APPENDIX B: ACTION ITEMS (landscape section) ---
-    children = actionChildren;
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix B: Improvement Plan Tracking', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
+    if (hasActions) {
+      children = actionChildren;
+      children.push(headingWithBookmark('appB', 'Appendix B: Improvement Plan Tracking'));
 
-    if (state.actionItems.length > 0) {
+      {
       var aHeader = new TableRow({
         tableHeader: true,
         cantSplit: true,
@@ -4630,14 +4858,13 @@ async function generateLongDOCX() {
         });
       });
       children.push(new Table({ rows: [aHeader, ...aRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
-    } else {
-      children.push(new Paragraph({ children: [new TextRun({ text: 'No action items were recorded.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 120 } }));
-    }
+      }
+    } // end hasActions
 
     // --- APPENDIX C: ACRONYMS (portrait section) ---
-    if (brand.sections.acronyms) {
+    if (hasAcronyms) {
       children = acronymsChildren;
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Appendix C: Acronym List', bold: true, color: primaryHex, font: fontName, size: 32 })], spacing: { after: 120 } }));
+      children.push(headingWithBookmark('appC', 'Appendix C: Acronym List'));
 
       var acHeader = new TableRow({
         tableHeader: true,
@@ -4675,8 +4902,13 @@ async function generateLongDOCX() {
         if (gi === 0) {
           children.push(new Paragraph({
             heading: HeadingLevel.HEADING_1,
-            children: [new TextRun({ text: 'Appendix D: Attached Reference Documents', bold: true, color: primaryHex, font: fontName, size: 32 })],
-            spacing: { after: 160 }
+            spacing: { after: 160 },
+            children: [
+              new Bookmark({
+                id: 'appD',
+                children: [new TextRun({ text: 'Appendix D: Attached Reference Documents', bold: true, color: primaryHex, font: fontName, size: 32 })],
+              }),
+            ],
           }));
         } else {
           children.push(new Paragraph({
@@ -4699,17 +4931,21 @@ async function generateLongDOCX() {
           try {
             var buf = fileBuffers.get(f.id);
             var pdfDoc = await window.pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+            var rotDeg = Number(f.rotation || 0);
+            var isLandscapePage = grp.orientation === 'landscape';
+            // Landscape page → content area ~9.5in x 7in (after 1in margins) = 912 x 672 px
+            // Portrait page  → ~6.5in x 9in = 624 x 864 px
+            var maxWidthPx = isLandscapePage ? 912 : 624;
+            var maxHeightPx = isLandscapePage ? 672 : 864;
             for (var pn = 1; pn <= pdfDoc.numPages; pn++) {
               var page = await pdfDoc.getPage(pn);
-              var viewport = page.getViewport({ scale: 2.0 });
+              var viewport = page.getViewport({ scale: 2.0, rotation: rotDeg });
               var canvas = document.createElement('canvas');
               canvas.width = viewport.width;
               canvas.height = viewport.height;
               await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
               var pngBlob = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
               var pngArr = await pngBlob.arrayBuffer();
-              var maxWidthPx = 624;
-              var maxHeightPx = 864;
               var ratio = Math.min(maxWidthPx / viewport.width, maxHeightPx / viewport.height, 1);
               var w = Math.round(viewport.width * ratio);
               var h = Math.round(viewport.height * ratio);
@@ -4811,6 +5047,30 @@ async function generateLongDOCX() {
         children: sectionChildren,
       };
     }
+
+    // Page-filler paragraph: emitted at the end of each DOCX section when enabled
+    var pfCfg = (brand.formatting && brand.formatting.pageFiller) || { enabled: false };
+    function pushFiller(arr) {
+      if (!pfCfg.enabled) return;
+      var bColor = (brand.secondaryColor || '#718096').replace('#', '');
+      var borderSpec = pfCfg.border ? { color: bColor, space: 8, style: BorderStyle.SINGLE, size: 6 } : undefined;
+      arr.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 1400, after: 120 },
+        border: borderSpec ? { top: borderSpec, bottom: borderSpec, left: borderSpec, right: borderSpec } : undefined,
+        children: [new TextRun({
+          text: pfCfg.text || 'Remainder of this page intentionally left blank.',
+          size: 20, font: fontName, italics: true, color: '718096',
+        })],
+      }));
+    }
+
+    pushFiller(mainChildren);
+    if (improvementsChildren.length > 0) pushFiller(improvementsChildren);
+    if (contextChildren.length > 0) pushFiller(contextChildren);
+    if (actionChildren.length > 0) pushFiller(actionChildren);
+    if (acronymsChildren.length > 0) pushFiller(acronymsChildren);
+    appendixDGroups.forEach(function(grp) { if (grp.children.length > 0) pushFiller(grp.children); });
 
     var docSections = [portraitSection(mainChildren)];
     if (improvementsChildren.length > 0) docSections.push(landscapeSection(improvementsChildren));
