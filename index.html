@@ -195,9 +195,9 @@ textarea { resize: vertical; min-height: 80px; }
 .generate-card .btn { margin-top: 16px; }
 /* Preview */
 .preview-container { background: var(--gray-100); border: 1px solid var(--gray-200); border-radius: 12px; padding: 24px; max-height: 720px; overflow-y: auto; }
-.preview-page { background: var(--white); border: 1px solid var(--gray-300); box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin: 0 auto 24px auto; padding: 40px 44px; position: relative; }
-.preview-page.portrait { width: 100%; max-width: 850px; aspect-ratio: 8.5 / 11; min-height: 900px; }
-.preview-page.landscape { width: 100%; max-width: 1100px; aspect-ratio: 11 / 8.5; min-height: 700px; }
+.preview-page { background: var(--white); border: 1px solid var(--gray-300); box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin: 0 auto 24px auto; padding: 40px 44px; position: relative; overflow: hidden; box-sizing: border-box; }
+.preview-page.portrait { width: 100%; max-width: 850px; height: 1100px; }
+.preview-page.landscape { width: 100%; max-width: 1100px; height: 850px; }
 .preview-page .page-label { position: absolute; top: 8px; right: 12px; font-size: 10px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; background: var(--gray-100); padding: 2px 8px; border-radius: 4px; }
 .preview-page .page-toc { list-style: none; padding: 0; margin: 12px 0 0 0; }
 .preview-page .page-toc li { padding: 6px 0; border-bottom: 1px dotted var(--gray-200); font-size: 14px; color: var(--primary); }
@@ -4251,8 +4251,120 @@ function refreshLongPreview() {
 
   c.innerHTML = html;
 
-  // Async-render PDF page images into placeholders
+  // Split any oversized sections across multiple preview pages
+  paginatePreview(c);
+
+  // Async-render PDF page images into placeholders (triggers re-pagination once loaded)
   renderPreviewPdfPages(c);
+}
+
+// Simulate page breaks: walk each .preview-page, move trailing children (or table rows)
+// to a new continuation page when content exceeds the fixed page height.
+function paginatePreview(rootEl) {
+  var safety = 0;
+  while (safety++ < 200) {
+    var pages = Array.from(rootEl.querySelectorAll('.preview-page'));
+    var changed = false;
+    for (var i = 0; i < pages.length; i++) {
+      if (splitOverflowingPage(pages[i])) { changed = true; break; }
+    }
+    if (!changed) break;
+  }
+}
+
+function splitOverflowingPage(page) {
+  if (page.scrollHeight <= page.clientHeight + 4) return false;
+
+  var label = page.querySelector(':scope > .page-label');
+  var filler = page.querySelector(':scope > .preview-filler');
+  var kids = Array.from(page.children).filter(function(el) { return el !== label && el !== filler; });
+  if (kids.length === 0) return false;
+
+  // Build the continuation page
+  var nextPage = document.createElement('section');
+  nextPage.className = page.className;
+  if (label) nextPage.appendChild(label.cloneNode(true));
+  // Filler is the last element — move it to the new page (it's supposed to be the end-of-section marker)
+  if (filler) { filler.remove(); nextPage.appendChild(filler); }
+
+  page.parentNode.insertBefore(nextPage, page.nextSibling);
+
+  // Move trailing children (and/or split tables) until the original page fits
+  while (page.scrollHeight > page.clientHeight + 4 && kids.length > 0) {
+    var last = kids[kids.length - 1];
+    if (last.tagName === 'TABLE' && last.rows && last.rows.length > 2) {
+      // Try to split the table by moving trailing rows to a clone on nextPage
+      var moved = moveTableOverflowRows(page, last, nextPage);
+      if (moved) continue;
+      // Couldn't split (e.g., header + 1 row) — fall through to full move
+    }
+    // Move the entire element to the next page
+    last.remove();
+    kids.pop();
+    if (filler) nextPage.insertBefore(last, filler);
+    else nextPage.appendChild(last);
+  }
+
+  // If nothing moved (table couldn't shrink enough), bail out to avoid infinite loop
+  var nextKids = Array.from(nextPage.children).filter(function(el) { return el !== label && el !== filler; });
+  if (nextKids.length === 0 && !filler) {
+    nextPage.remove();
+    return false;
+  }
+  return true;
+}
+
+// Split a long table: move trailing rows into a cloned table on nextPage (with the header repeated).
+// Returns true if at least one row moved.
+function moveTableOverflowRows(page, tbl, nextPage) {
+  var headerRow = tbl.rows[0];
+  if (!headerRow) return false;
+  // Find or create the continuation table on nextPage (insert as a new element at top after label)
+  var filler = nextPage.querySelector(':scope > .preview-filler');
+  var existing = null;
+  // If the first non-label/non-filler child is a table marked as continuation of this one, reuse
+  var firstKid = Array.from(nextPage.children).find(function(el) {
+    return el.tagName === 'TABLE' && el.dataset.splitContinuation === '1';
+  });
+  existing = firstKid || null;
+
+  var cont;
+  if (existing) {
+    cont = existing;
+  } else {
+    cont = document.createElement('table');
+    cont.dataset.splitContinuation = '1';
+    var tbodyNew = document.createElement('tbody');
+    cont.appendChild(tbodyNew);
+    tbodyNew.appendChild(headerRow.cloneNode(true));
+    // Insert at top of nextPage content (after label, before filler)
+    var label = nextPage.querySelector(':scope > .page-label');
+    if (label && label.nextSibling) nextPage.insertBefore(cont, label.nextSibling);
+    else if (filler) nextPage.insertBefore(cont, filler);
+    else nextPage.appendChild(cont);
+  }
+
+  var moved = false;
+  var contBody = cont.tBodies[0] || cont;
+  // Move trailing rows one by one until page fits OR only header remains
+  while (page.scrollHeight > page.clientHeight + 4 && tbl.rows.length > 1) {
+    var lastRow = tbl.rows[tbl.rows.length - 1];
+    if (lastRow === headerRow) break;
+    lastRow.remove();
+    // Prepend to cont body (after header) to preserve order
+    var headerInCont = contBody.rows[0];
+    if (headerInCont && headerInCont.nextSibling) {
+      contBody.insertBefore(lastRow, headerInCont.nextSibling);
+    } else {
+      contBody.appendChild(lastRow);
+    }
+    moved = true;
+  }
+  // If the original table ended up with only its header, remove it (nothing left to show)
+  if (tbl.rows.length <= 1) {
+    tbl.remove();
+  }
+  return moved;
 }
 
 // Render each .pdf-page-placeholder into an <img> with the page rendered via pdf.js
@@ -4306,6 +4418,13 @@ async function renderPreviewPdfPages(rootEl) {
       byId[id].forEach(function(el) { el.textContent = 'Preview render failed: ' + err.message; });
     }
   }
+
+  // Wait for all inserted images to finish decoding, then re-paginate
+  var imgs = Array.from(rootEl.querySelectorAll('.pdf-page-img'));
+  await Promise.all(imgs.map(function(img) {
+    return img.complete ? Promise.resolve() : new Promise(function(res) { img.onload = img.onerror = res; });
+  }));
+  paginatePreview(rootEl);
 }
 
 // ========================================
