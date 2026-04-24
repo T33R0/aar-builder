@@ -203,7 +203,13 @@ textarea { resize: vertical; min-height: 80px; }
 .preview-page .page-toc li { padding: 6px 0; border-bottom: 1px dotted var(--gray-200); font-size: 14px; color: var(--primary); }
 .preview-page .preview-filler { margin-top: 80px; padding: 16px; text-align: center; font-size: 13px; font-style: italic; color: var(--gray-500); }
 .preview-page .preview-filler.bordered { border: 1px solid var(--gray-400); border-radius: 6px; padding: 24px; }
-.preview-page .pdf-page-img { display: block; margin: 8px auto; max-width: 100%; border: 1px solid var(--gray-300); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.preview-page .pdf-page-img { display: block; margin: 8px auto; max-width: 100%; object-fit: contain; border: 1px solid var(--gray-300); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.preview-page.portrait .pdf-page-img { max-height: 980px; }
+.preview-page.landscape .pdf-page-img { max-height: 720px; }
+/* First-page PDF placeholder accounts for the heading + info row */
+.preview-page .pdf-page-placeholder:first-of-type + .pdf-page-img,
+.preview-page h3 ~ .pdf-page-img { max-height: 900px; }
+.preview-page.landscape h3 ~ .pdf-page-img { max-height: 640px; }
 .preview-page .pdf-page-placeholder { margin: 8px auto; padding: 40px; text-align: center; color: var(--gray-500); font-size: 13px; background: var(--gray-100); border-radius: 6px; }
 .preview-container h1 { font-size: 24px; color: var(--primary); border-bottom: 3px solid var(--primary); padding-bottom: 10px; margin-bottom: 20px; }
 .preview-container h2 { font-size: 18px; color: var(--primary); margin: 24px 0 12px; }
@@ -311,6 +317,23 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
 .settings-tab:hover { color: var(--text); }
 .settings-panel { display: none; }
 .settings-panel.active { display: block; }
+/* Sidebar collapse */
+.sidebar { transition: transform 0.2s ease, width 0.2s ease; }
+body.sidebar-collapsed .sidebar { transform: translateX(-100%); width: 0; padding: 0; overflow: hidden; }
+body.sidebar-collapsed .main-content { margin-left: 0; }
+.sidebar-toggle { position: fixed; top: calc(var(--header-h) + 12px); left: 12px; z-index: 60; width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--gray-300); background: var(--white); color: var(--primary); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: left 0.2s ease; }
+.sidebar-toggle:hover { background: var(--gray-100); }
+body:not(.sidebar-collapsed) .sidebar-toggle { left: calc(var(--sidebar-w) - 20px); }
+/* Sortable table headers */
+.data-table th.sortable { cursor: pointer; user-select: none; }
+.data-table th.sortable:hover { background: #002855; }
+.data-table th.sortable .sort-ind { font-size: 10px; margin-left: 6px; opacity: 0.5; }
+.data-table th.sortable.sorted .sort-ind { opacity: 1; }
+/* Roster blocks on entry side */
+.roster-block { margin-bottom: 24px; }
+.roster-block .roster-header { font-size: 14px; font-weight: 600; color: var(--primary); margin: 16px 0 8px; padding: 8px 12px; background: #EBF4FF; border-left: 4px solid var(--primary); border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+.roster-block .roster-header .roster-count { font-size: 12px; color: var(--gray-600); font-weight: 500; }
+.roster-block:first-child .roster-header { margin-top: 0; }
 </style>
 </head>
 <body>
@@ -343,6 +366,7 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
 
 <!-- Layout -->
 <div class="app-layout">
+  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="Toggle sidebar" aria-label="Toggle sidebar">&#9776;</button>
   <!-- Sidebar -->
   <nav class="sidebar">
     <ul class="sidebar-nav" id="sidebarNav">
@@ -484,27 +508,35 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label for="pEmail">Email (optional)</label>
-            <input type="email" id="pEmail" placeholder="email@example.com">
+            <label for="pEid">EID (optional)</label>
+            <input type="text" id="pEid" placeholder="Employee ID">
           </div>
           <div class="form-group">
-            <label>Locations / Dates Attended</label>
-            <div id="pLocationsAssign" class="location-checkboxes"></div>
+            <label for="pDate">Date Attended (optional)</label>
+            <input type="date" id="pDate">
           </div>
+        </div>
+        <div class="form-group">
+          <label>Locations Attended</label>
+          <div id="pLocationsAssign" class="location-checkboxes"></div>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="addParticipant()">+ Add Participant</button>
       </div>
 
       <div class="form-card">
-        <h3>Participant List</h3>
-        <div style="overflow-x:auto;">
-          <table class="data-table" id="participantTable">
-            <thead>
-              <tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title/Role</th><th>Department</th><th>Email</th><th>Locations</th><th>Actions</th></tr>
-            </thead>
-            <tbody id="participantTableBody"></tbody>
-          </table>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; padding-bottom:10px; border-bottom:2px solid var(--gray-200);">
+          <h3 style="margin:0; padding:0; border:none;">Participant List</h3>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label for="participantGrouping" style="margin:0; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--gray-600);">Split list by</label>
+            <select id="participantGrouping" class="file-mode-select" onchange="onParticipantGroupingChange()">
+              <option value="none">None (single list)</option>
+              <option value="location">Location</option>
+              <option value="date">Date</option>
+              <option value="both">Location &amp; Date</option>
+            </select>
+          </div>
         </div>
+        <div id="participantRosters"></div>
         <p id="noParticipantsMsg" style="text-align:center; color:var(--gray-500); padding:20px; font-size:14px;">No participants added yet.</p>
       </div>
 
@@ -1225,13 +1257,17 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
     </div>
     <div class="participant-edit-row">
       <div class="form-group">
-        <label for="editPEmail">Email</label>
-        <input type="email" id="editPEmail">
+        <label for="editPEid">EID</label>
+        <input type="text" id="editPEid" placeholder="Employee ID">
       </div>
       <div class="form-group">
-        <label>Locations / Dates</label>
-        <div id="editPLocationsAssign" class="location-checkboxes"></div>
+        <label for="editPDate">Date Attended</label>
+        <input type="date" id="editPDate">
       </div>
+    </div>
+    <div class="form-group">
+      <label>Locations</label>
+      <div id="editPLocationsAssign" class="location-checkboxes"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeEditParticipant()">Cancel</button>
@@ -1372,9 +1408,16 @@ input[type="color"] { width: 50px; height: 36px; border: 1px solid var(--gray-30
         <select id="mapDept"><option value="-1">-- Skip --</option></select>
       </div>
       <div class="form-group">
-        <label>Email</label>
-        <select id="mapEmail"><option value="-1">-- Skip --</option></select>
+        <label>EID (accepts Email column too)</label>
+        <select id="mapEid"><option value="-1">-- Skip --</option></select>
       </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date Attended</label>
+        <select id="mapDate"><option value="-1">-- Skip --</option></select>
+      </div>
+      <div class="form-group"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeColumnMapping()">Cancel</button>
@@ -1502,7 +1545,8 @@ let state = {
   eventTitle: '', eventType: '', eventDateStart: '', eventDateEnd: '',
   eventLocation: '', facility: '', eventLocations: [], sponsorOrg: '', directorName: '', directorTitle: '',
   overallAssessment: '',
-  participants: [], // {firstName, lastName, title, department, email, locationIds:[]}
+  participants: [], // {firstName, lastName, title, department, eid, attendedDate, locationIds:[]}
+  participantGrouping: 'none', // 'none' | 'location' | 'date' | 'both'
   uploadedFiles: [], // {id, name, type, size, text, mode: 'extract'|'append'|'both'|'none'}
   purpose: '', scope: '',
   objectives: [], // {description, coreCapability, rating, analysis}
@@ -1633,6 +1677,7 @@ function getDefaultState() {
     eventLocation: '', facility: '', eventLocations: [], sponsorOrg: '', directorName: '', directorTitle: '',
     overallAssessment: '',
     participants: [],
+    participantGrouping: 'none',
     uploadedFiles: [],
     purpose: '', scope: '',
     objectives: [],
@@ -2555,24 +2600,31 @@ function migrateParticipants() {
     if (p.firstName === undefined) p.firstName = '';
     if (p.lastName === undefined) p.lastName = '';
     if (!Array.isArray(p.locationIds)) p.locationIds = [];
+    // Email → EID migration: if eid is empty and email has a value, promote it.
+    if ((p.eid === undefined || p.eid === '') && p.email) p.eid = p.email;
+    if (p.eid === undefined) p.eid = '';
+    if (p.attendedDate === undefined) p.attendedDate = '';
   });
+  if (state.participantGrouping === undefined) state.participantGrouping = 'none';
 }
 
-function addParticipant(firstName, lastName, title, dept, email, locationIds) {
+function addParticipant(firstName, lastName, title, dept, eid, locationIds, attendedDate) {
   var fn = (firstName !== undefined ? firstName : document.getElementById('pFirstName').value).trim();
   var ln = (lastName !== undefined ? lastName : document.getElementById('pLastName').value).trim();
   var t = (title !== undefined ? title : document.getElementById('pTitle').value).trim();
   var d = (dept !== undefined ? dept : document.getElementById('pDept').value).trim();
-  var e = (email !== undefined ? email : document.getElementById('pEmail').value).trim();
+  var eidVal = (eid !== undefined ? eid : document.getElementById('pEid').value).trim();
+  var dateVal = attendedDate !== undefined ? attendedDate : (document.getElementById('pDate').value || '').trim();
   var locs = Array.isArray(locationIds) ? locationIds : readLocationCheckboxes('pLocationsAssign');
   if (!fn && !ln) { showToast('First or last name is required', 'error'); return; }
-  state.participants.push({ firstName: fn, lastName: ln, title: t, department: d, email: e, locationIds: locs });
+  state.participants.push({ firstName: fn, lastName: ln, title: t, department: d, eid: eidVal, attendedDate: dateVal, locationIds: locs });
   if (firstName === undefined) { // only clear if from form
     document.getElementById('pFirstName').value = '';
     document.getElementById('pLastName').value = '';
     document.getElementById('pTitle').value = '';
     document.getElementById('pDept').value = '';
-    document.getElementById('pEmail').value = '';
+    document.getElementById('pEid').value = '';
+    document.getElementById('pDate').value = '';
     renderParticipantLocationAssign('add');
   }
   renderParticipants();
@@ -2608,32 +2660,201 @@ function participantFullName(p) {
   return p.name || '';
 }
 
-function renderParticipants() {
-  var tbody = document.getElementById('participantTableBody');
-  var msg = document.getElementById('noParticipantsMsg');
-  if (!tbody || !msg) return;
-  tbody.innerHTML = '';
-  if (state.participants.length === 0) {
-    msg.style.display = 'block';
-    document.getElementById('participantCount').textContent = '0';
-    return;
+// Transient sort state per roster. Keys: 'all' (no grouping) or a grouping key like 'loc:<id>', 'date:<YYYY-MM-DD>', 'loc:<id>|date:<YYYY-MM-DD>'.
+var participantSortByRoster = {};
+
+// Column definitions used by the entry table. key must match a participant field or be a virtual column.
+var PARTICIPANT_COLUMNS = [
+  { key: 'firstName',    label: 'First Name',  sortValue: function(p){ return (p.firstName||'').toLowerCase(); } },
+  { key: 'lastName',     label: 'Last Name',   sortValue: function(p){ return (p.lastName||'').toLowerCase(); } },
+  { key: 'title',        label: 'Title/Role',  sortValue: function(p){ return (p.title||'').toLowerCase(); } },
+  { key: 'department',   label: 'Department',  sortValue: function(p){ return (p.department||'').toLowerCase(); } },
+  { key: 'eid',          label: 'EID',         sortValue: function(p){ return (p.eid||'').toLowerCase(); } },
+  { key: 'attendedDate', label: 'Date',        sortValue: function(p){ return p.attendedDate||''; } },
+  { key: 'locations',    label: 'Locations',   sortValue: function(p){ return participantLocationsText(p).toLowerCase(); } },
+];
+
+function onParticipantGroupingChange() {
+  var sel = document.getElementById('participantGrouping');
+  if (!sel) return;
+  state.participantGrouping = sel.value || 'none';
+  participantSortByRoster = {}; // reset sort state across regrouping
+  renderParticipants();
+  autoSave();
+}
+
+function participantRosterKey(mode) {
+  return function(p) {
+    if (mode === 'none') return { key: 'all', label: '', locId: null, date: null };
+    if (mode === 'location') {
+      var ids = (Array.isArray(p.locationIds) && p.locationIds.length) ? p.locationIds : [null];
+      return ids.map(function(id){ return { key: 'loc:' + (id||'none'), locId: id, date: null }; });
+    }
+    if (mode === 'date') {
+      var d = p.attendedDate || '';
+      return { key: 'date:' + (d || 'none'), locId: null, date: d };
+    }
+    // both
+    var ids2 = (Array.isArray(p.locationIds) && p.locationIds.length) ? p.locationIds : [null];
+    var dv = p.attendedDate || '';
+    return ids2.map(function(id){ return { key: 'loc:' + (id||'none') + '|date:' + (dv||'none'), locId: id, date: dv }; });
+  };
+}
+
+function buildParticipantRosters() {
+  var mode = state.participantGrouping || 'none';
+  if (mode === 'none') {
+    return [{ key: 'all', title: 'Participant List (' + state.participants.length + ')', rows: state.participants.slice(), locId: null, date: null, mode: mode }];
   }
-  msg.style.display = 'none';
-  document.getElementById('participantCount').textContent = state.participants.length;
-  state.participants.forEach(function(p, i) {
-    var tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + (i + 1) + '</td>' +
+  var keyFn = participantRosterKey(mode);
+  var byKey = {};
+  var order = [];
+  state.participants.forEach(function(p) {
+    var keys = keyFn(p);
+    if (!Array.isArray(keys)) keys = [keys];
+    keys.forEach(function(k) {
+      if (!byKey[k.key]) {
+        byKey[k.key] = { key: k.key, rows: [], locId: k.locId, date: k.date, mode: mode };
+        order.push(k.key);
+      }
+      byKey[k.key].rows.push(p);
+    });
+  });
+  // Sort rosters: by location order first, then by date ascending (empty last).
+  var locOrder = {};
+  (state.eventLocations || []).forEach(function(l, i){ locOrder[l.id] = i; });
+  order.sort(function(a, b) {
+    var ra = byKey[a], rb = byKey[b];
+    var la = ra.locId != null ? (locOrder[ra.locId] != null ? locOrder[ra.locId] : 999) : 999;
+    var lb = rb.locId != null ? (locOrder[rb.locId] != null ? locOrder[rb.locId] : 999) : 999;
+    if (la !== lb) return la - lb;
+    var da = ra.date || '~';
+    var db = rb.date || '~';
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
+  return order.map(function(k) {
+    var r = byKey[k];
+    r.title = rosterTitle(r);
+    return r;
+  });
+}
+
+function rosterTitle(roster) {
+  var parts = [];
+  if (roster.locId != null) {
+    var li = (state.eventLocations || []).findIndex(function(l){ return l.id === roster.locId; });
+    if (li >= 0) {
+      var l = state.eventLocations[li];
+      parts.push(l.facility || l.address || ('Location ' + (li + 1)));
+    } else {
+      parts.push('Unassigned location');
+    }
+  } else if (roster.mode === 'location' || roster.mode === 'both') {
+    parts.push('Unassigned location');
+  }
+  if (roster.date != null) {
+    parts.push(roster.date ? formatDate(roster.date) : 'No date');
+  }
+  return parts.join(' — ');
+}
+
+function applyParticipantSort(rows, rosterKey) {
+  var sort = participantSortByRoster[rosterKey];
+  if (!sort) return rows;
+  var col = PARTICIPANT_COLUMNS.find(function(c){ return c.key === sort.col; });
+  if (!col) return rows;
+  var dir = sort.dir === 'desc' ? -1 : 1;
+  return rows.slice().sort(function(a, b) {
+    var av = col.sortValue(a), bv = col.sortValue(b);
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+}
+
+function sortParticipantRoster(rosterKey, colKey) {
+  var cur = participantSortByRoster[rosterKey];
+  var dir = (cur && cur.col === colKey && cur.dir === 'asc') ? 'desc' : 'asc';
+  participantSortByRoster[rosterKey] = { col: colKey, dir: dir };
+  renderParticipants();
+}
+
+// Shared HTML table builder for preview (Appendix A). Caller supplies the row set; numbering restarts at 1.
+function renderParticipantRosterTableHTML(rows) {
+  var showDate = state.participantGrouping !== 'date' && state.participantGrouping !== 'both';
+  var header = '<tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title</th><th>Department</th><th>EID</th>';
+  if (showDate) header += '<th>Date</th>';
+  header += '</tr>';
+  var body = rows.map(function(p, i) {
+    var row = '<tr><td>' + (i + 1) + '</td>' +
       '<td>' + esc(p.firstName || '') + '</td>' +
       '<td>' + esc(p.lastName || '') + '</td>' +
       '<td>' + esc(p.title || '') + '</td>' +
       '<td>' + esc(p.department || '') + '</td>' +
-      '<td>' + esc(p.email || '') + '</td>' +
-      '<td>' + participantLocationBadges(p) + '</td>' +
-      '<td class="table-actions">' +
-        '<button class="edit-btn" onclick="openEditParticipant(' + i + ')">Edit</button>' +
-        '<button class="delete-btn" onclick="deleteParticipant(' + i + ')">Delete</button>' +
-      '</td>';
-    tbody.appendChild(tr);
+      '<td>' + esc(p.eid || '') + '</td>';
+    if (showDate) row += '<td>' + (p.attendedDate ? esc(formatDate(p.attendedDate)) : '') + '</td>';
+    row += '</tr>';
+    return row;
+  }).join('');
+  return '<table>' + header + body + '</table>';
+}
+
+function renderParticipants() {
+  var container = document.getElementById('participantRosters');
+  var msg = document.getElementById('noParticipantsMsg');
+  var countEl = document.getElementById('participantCount');
+  if (!container || !msg) return;
+  container.innerHTML = '';
+  // Sync the grouping dropdown with state
+  var gSel = document.getElementById('participantGrouping');
+  if (gSel) gSel.value = state.participantGrouping || 'none';
+
+  if (state.participants.length === 0) {
+    msg.style.display = 'block';
+    if (countEl) countEl.textContent = '0';
+    return;
+  }
+  msg.style.display = 'none';
+  if (countEl) countEl.textContent = state.participants.length;
+
+  var rosters = buildParticipantRosters();
+  rosters.forEach(function(roster) {
+    var block = document.createElement('div');
+    block.className = 'roster-block';
+    var header = '';
+    if (roster.key !== 'all') {
+      header = '<div class="roster-header"><span>' + esc(roster.title) + '</span><span class="roster-count">' + roster.rows.length + ' participant' + (roster.rows.length === 1 ? '' : 's') + '</span></div>';
+    }
+    var sort = participantSortByRoster[roster.key] || { col: null, dir: 'asc' };
+    var thCells = PARTICIPANT_COLUMNS.map(function(c) {
+      var isSorted = sort.col === c.key;
+      var ind = isSorted ? (sort.dir === 'asc' ? '&uarr;' : '&darr;') : '&#8645;';
+      return '<th class="sortable' + (isSorted ? ' sorted' : '') + '" onclick="sortParticipantRoster(\'' + esc(roster.key) + '\',\'' + c.key + '\')">' + c.label + '<span class="sort-ind">' + ind + '</span></th>';
+    }).join('');
+    var sorted = applyParticipantSort(roster.rows, roster.key);
+    var tbodyHTML = sorted.map(function(p) {
+      var gi = state.participants.indexOf(p);
+      var displayIdx = sorted.indexOf(p) + 1;
+      return '<tr>' +
+        '<td>' + displayIdx + '</td>' +
+        '<td>' + esc(p.firstName || '') + '</td>' +
+        '<td>' + esc(p.lastName || '') + '</td>' +
+        '<td>' + esc(p.title || '') + '</td>' +
+        '<td>' + esc(p.department || '') + '</td>' +
+        '<td>' + esc(p.eid || '') + '</td>' +
+        '<td>' + (p.attendedDate ? esc(formatDate(p.attendedDate)) : '') + '</td>' +
+        '<td>' + participantLocationBadges(p) + '</td>' +
+        '<td class="table-actions">' +
+          '<button class="edit-btn" onclick="openEditParticipant(' + gi + ')">Edit</button>' +
+          '<button class="delete-btn" onclick="deleteParticipant(' + gi + ')">Delete</button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+    block.innerHTML = header +
+      '<div style="overflow-x:auto;"><table class="data-table"><thead><tr>' +
+        '<th>#</th>' + thCells + '<th>Actions</th>' +
+      '</tr></thead><tbody>' + tbodyHTML + '</tbody></table></div>';
+    container.appendChild(block);
   });
 }
 
@@ -2650,7 +2871,8 @@ function openEditParticipant(i) {
   document.getElementById('editPLastName').value = p.lastName || '';
   document.getElementById('editPTitle').value = p.title || '';
   document.getElementById('editPDept').value = p.department || '';
-  document.getElementById('editPEmail').value = p.email || '';
+  document.getElementById('editPEid').value = p.eid || '';
+  document.getElementById('editPDate').value = p.attendedDate || '';
   renderParticipantLocationAssign('edit', p.locationIds || []);
   document.getElementById('editParticipantModal').classList.add('active');
 }
@@ -2664,7 +2886,8 @@ function saveEditParticipant() {
     lastName: document.getElementById('editPLastName').value.trim(),
     title: document.getElementById('editPTitle').value.trim(),
     department: document.getElementById('editPDept').value.trim(),
-    email: document.getElementById('editPEmail').value.trim(),
+    eid: document.getElementById('editPEid').value.trim(),
+    attendedDate: document.getElementById('editPDate').value || '',
     locationIds: readLocationCheckboxes('editPLocationsAssign')
   };
   closeEditParticipant();
@@ -2752,14 +2975,15 @@ function openColumnMapping(headers, rows) {
   preview.innerHTML = html;
 
   // Populate mapping dropdowns
-  var fields = ['mapFirstName', 'mapLastName', 'mapName', 'mapTitle', 'mapDept', 'mapEmail'];
+  var fields = ['mapFirstName', 'mapLastName', 'mapName', 'mapTitle', 'mapDept', 'mapEid', 'mapDate'];
   var matchers = {
     mapFirstName: ['first name', 'firstname', 'first', 'given name'],
     mapLastName: ['last name', 'lastname', 'last', 'surname', 'family name'],
     mapName: ['full name', 'participant', 'attendee', 'name'],
     mapTitle: ['title', 'role', 'position', 'job title', 'job'],
     mapDept: ['department', 'dept', 'organization', 'org', 'unit', 'division'],
-    mapEmail: ['email', 'e-mail', 'email address', 'mail']
+    mapEid: ['eid', 'employee id', 'employeeid', 'emp id', 'email', 'e-mail', 'mail'],
+    mapDate: ['date attended', 'attended', 'attendance date', 'date']
   };
 
   fields.forEach(function(field) {
@@ -2794,7 +3018,8 @@ function applyColumnMapping() {
   var nameIdx = parseInt(document.getElementById('mapName').value);
   var titleIdx = parseInt(document.getElementById('mapTitle').value);
   var deptIdx = parseInt(document.getElementById('mapDept').value);
-  var emailIdx = parseInt(document.getElementById('mapEmail').value);
+  var eidIdx = parseInt(document.getElementById('mapEid').value);
+  var dateIdx = parseInt(document.getElementById('mapDate').value);
 
   if (firstIdx < 0 && lastIdx < 0 && nameIdx < 0) { showToast('Map at least one of: First Name, Last Name, or Name', 'error'); return; }
 
@@ -2809,8 +3034,9 @@ function applyColumnMapping() {
     if (!fn && !ln) return;
     var title = titleIdx >= 0 ? (row[titleIdx] || '').trim() : '';
     var dept = deptIdx >= 0 ? (row[deptIdx] || '').trim() : '';
-    var email = emailIdx >= 0 ? (row[emailIdx] || '').trim() : '';
-    addParticipant(fn, ln, title, dept, email, []);
+    var eidVal = eidIdx >= 0 ? (row[eidIdx] || '').trim() : '';
+    var dateVal = dateIdx >= 0 ? normalizeImportDate((row[dateIdx] || '').trim()) : '';
+    addParticipant(fn, ln, title, dept, eidVal, [], dateVal);
     count++;
   });
 
@@ -4219,36 +4445,28 @@ function refreshLongPreview() {
 
   // --- APPENDIX A: PARTICIPANTS ---
   if (hasParticipants) {
-    var multiLoc = state.eventLocations.length > 1;
-    var aa = '';
-    if (multiLoc) {
-      aa += '<h2>Appendix A: Participants — Per-Location Rosters</h2>';
-      state.eventLocations.forEach(function(l, li) {
-        var assigned = state.participants.filter(function(p) {
-          return !Array.isArray(p.locationIds) || p.locationIds.length === 0 || p.locationIds.indexOf(l.id) >= 0;
-        });
-        var nm = l.facility || l.address || ('Location ' + (li + 1));
-        var dateLbl = l.dateStart ? formatDate(l.dateStart) + (l.dateEnd && l.dateEnd !== l.dateStart ? ' – ' + formatDate(l.dateEnd) : '') : '';
-        aa += '<h3>' + esc(nm) + (dateLbl ? ' — ' + esc(dateLbl) : '') + ' (' + assigned.length + ')</h3>';
-        if (assigned.length === 0) {
-          aa += '<p style="color:var(--gray-500);">No participants assigned.</p>';
-        } else {
-          aa += '<table><tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title</th><th>Department</th><th>Email</th></tr>';
-          assigned.forEach(function(p, ai) {
-            aa += '<tr><td>' + (ai + 1) + '</td><td>' + esc(p.firstName || '') + '</td><td>' + esc(p.lastName || '') + '</td><td>' + esc(p.title || '') + '</td><td>' + esc(p.department || '') + '</td><td>' + esc(p.email || '') + '</td></tr>';
-          });
-          aa += '</table>';
-        }
-      });
+    var rosters = buildParticipantRosters();
+    var singleList = rosters.length === 1 && rosters[0].key === 'all';
+    if (singleList) {
+      var aa = '<h2>Appendix A: Participant List (' + state.participants.length + ')</h2>';
+      aa += renderParticipantRosterTableHTML(rosters[0].rows);
+      html += page('portrait', aa);
     } else {
-      aa += '<h2>Appendix A: Participant List (' + state.participants.length + ')</h2>';
-      aa += '<table><tr><th>#</th><th>First Name</th><th>Last Name</th><th>Title</th><th>Department</th><th>Email</th></tr>';
-      state.participants.forEach(function(p, i) {
-        aa += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.firstName || '') + '</td><td>' + esc(p.lastName || '') + '</td><td>' + esc(p.title || '') + '</td><td>' + esc(p.department || '') + '</td><td>' + esc(p.email || '') + '</td></tr>';
+      // One preview page per roster — numbering restarts per roster and each roster starts fresh.
+      rosters.forEach(function(roster, ri) {
+        var body = '';
+        if (ri === 0) {
+          var mode = state.participantGrouping;
+          var subTitle = mode === 'date' ? 'By Date' : mode === 'both' ? 'By Location & Date' : 'Per-Location Rosters';
+          body += '<h2>Appendix A: Participants — ' + subTitle + '</h2>';
+        }
+        body += '<h3>' + esc(roster.title) + ' (' + roster.rows.length + ')</h3>';
+        body += roster.rows.length
+          ? renderParticipantRosterTableHTML(roster.rows)
+          : '<p style="color:var(--gray-500);">No participants assigned.</p>';
+        html += page('portrait', body);
       });
-      aa += '</table>';
     }
-    html += page('portrait', aa);
   }
 
   // --- APPENDIX B: ACTION ITEMS (landscape) ---
@@ -4274,38 +4492,45 @@ function refreshLongPreview() {
   }
 
   // --- APPENDIX D: ATTACHED REFERENCE DOCUMENTS ---
+  // Each attached PDF page becomes its own preview-page section (bypasses the pagination splitter
+  // entirely — trying to split a page containing a full-letter image was producing blank + reversed pages).
   if (hasAppD) {
+    var firstAppD = true;
     appendFilesPrev.forEach(function(f, i) {
       var orient = f.orientation === 'landscape' ? 'landscape' : 'portrait';
       var rot = Number(f.rotation || 0);
-      var pages = f.pageCount ? (f.pageCount + ' page' + (f.pageCount === 1 ? '' : 's')) : '';
+      var pagesLbl = f.pageCount ? (f.pageCount + ' page' + (f.pageCount === 1 ? '' : 's')) : '';
       var embedNote = f.type === 'pdf'
-        ? (fileBuffers.has(f.id) ? ' &middot; <span style="color:var(--green);">Pages embedded below</span>' : ' &middot; <span style="color:var(--orange);">Re-upload required for page embed</span>')
+        ? (fileBuffers.has(f.id) ? ' &middot; <span style="color:var(--green);">Pages embedded</span>' : ' &middot; <span style="color:var(--orange);">Re-upload required for page embed</span>')
         : ' &middot; Text appendix only';
-      var body = (i === 0 ? '<h2>Appendix D: Attached Reference Documents</h2>' : '');
-      body += '<h3>D.' + (i + 1) + ' — ' + esc(f.name) + '</h3>';
-      body += '<p style="font-size:13px; color:var(--gray-600); margin-top:-4px;">' +
-        f.type.toUpperCase() + ' &middot; ' + f.size +
-        (pages ? ' &middot; ' + pages : '') +
-        ' &middot; Orientation: ' + (orient === 'landscape' ? 'Landscape' : 'Portrait') +
-        (f.type === 'pdf' ? ' &middot; Rotation: ' + rot + '°' : '') +
-        embedNote + '</p>';
+      var titleBar = (firstAppD ? '<h2>Appendix D: Attached Reference Documents</h2>' : '') +
+        '<h3>D.' + (i + 1) + ' — ' + esc(f.name) + '</h3>' +
+        '<p style="font-size:13px; color:var(--gray-600); margin-top:-4px;">' +
+          f.type.toUpperCase() + ' &middot; ' + f.size +
+          (pagesLbl ? ' &middot; ' + pagesLbl : '') +
+          ' &middot; Orientation: ' + (orient === 'landscape' ? 'Landscape' : 'Portrait') +
+          (f.type === 'pdf' ? ' &middot; Rotation: ' + rot + '°' : '') +
+          embedNote + '</p>';
+      firstAppD = false;
+
       var hasBuffer = fileBuffers.has(f.id);
       var cached = filePreviewImages.get(f.id);
       var hasCachedImages = cached && cached.rotation === rot && cached.pages && cached.pages.length;
       if (f.type === 'pdf' && (hasBuffer || hasCachedImages)) {
-        // Placeholders that async-fill with rendered page images (from buffer or cached data URLs)
         var pageCount = f.pageCount || (hasCachedImages ? cached.pages.length : 1);
         for (var p = 1; p <= pageCount; p++) {
-          body += '<div class="pdf-page-placeholder" data-pdf-id="' + esc(f.id) + '" data-pdf-page="' + p + '" data-pdf-rotation="' + rot + '">Rendering page ' + p + '…</div>';
+          var intro = p === 1 ? titleBar : '';
+          var pageBody = intro + '<div class="pdf-page-placeholder" data-pdf-id="' + esc(f.id) + '" data-pdf-page="' + p + '" data-pdf-rotation="' + rot + '">Rendering page ' + p + '…</div>';
+          html += page(orient, pageBody);
         }
       } else if (f.text && f.text.trim()) {
         var textExcerpt = f.text.slice(0, 1000);
-        body += '<pre style="white-space:pre-wrap; font-size:12px; background:var(--gray-100); padding:10px 12px; border-left:3px solid var(--secondary); border-radius:4px; max-height:340px; overflow-y:auto;">' + esc(textExcerpt) + (f.text.length > 1000 ? '…' : '') + '</pre>';
+        var body = titleBar + '<pre style="white-space:pre-wrap; font-size:12px; background:var(--gray-100); padding:10px 12px; border-left:3px solid var(--secondary); border-radius:4px; max-height:700px; overflow-y:auto;">' + esc(textExcerpt) + (f.text.length > 1000 ? '…' : '') + '</pre>';
+        html += page(orient, body);
       } else {
-        body += '<p style="font-size:12px; color:var(--gray-500); font-style:italic;">(No selectable text extracted — likely a scanned image. Edit the extracted text in Step 3 if you want a text transcript included.)</p>';
+        var body2 = titleBar + '<p style="font-size:12px; color:var(--gray-500); font-style:italic;">(No selectable text extracted — likely a scanned image. Edit the extracted text in Step 3 if you want a text transcript included.)</p>';
+        html += page(orient, body2);
       }
-      html += page(orient, body);
     });
   }
 
@@ -4964,68 +5189,46 @@ async function generateLongDOCX() {
       if (hasContext) children.push(new Paragraph({ children: [new PageBreak()] }));
       children.push(headingWithBookmark('appA', 'Appendix A: Participant List'));
 
-      var multiLocDocx = state.eventLocations.length > 1;
-      if (multiLocDocx) {
-        // Per-location rosters only — no master list duplicate
-        state.eventLocations.forEach(function(l, li) {
-          var assigned = state.participants.filter(function(p) {
-            return !Array.isArray(p.locationIds) || p.locationIds.length === 0 || p.locationIds.indexOf(l.id) >= 0;
-          });
-          if (li > 0) children.push(new Paragraph({ spacing: { before: 200 } }));
-          var nm = l.facility || l.address || ('Location ' + (li + 1));
-          var dateLbl = l.dateStart ? formatDate(l.dateStart) + (l.dateEnd && l.dateEnd !== l.dateStart ? ' – ' + formatDate(l.dateEnd) : '') : '';
+      var rostersDocx = buildParticipantRosters();
+      var singleDocx = rostersDocx.length === 1 && rostersDocx[0].key === 'all';
+      var showDateCol = state.participantGrouping !== 'date' && state.participantGrouping !== 'both';
+
+      function docxParticipantTable(rows) {
+        var headerCells = [thCell('#', 5), thCell('First Name', 18), thCell('Last Name', 18), thCell('Title/Role', 22), thCell('Department', 17), thCell('EID', 10)];
+        if (showDateCol) headerCells.push(thCell('Date', 10));
+        var header = new TableRow({ tableHeader: true, cantSplit: true, children: headerCells });
+        var body = rows.map(function(p, ai) {
+          var shade = ai % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
+          var cells = [
+            tc(String(ai + 1), { shading: shade, fontSize: 18 }),
+            tc(p.firstName || '', { shading: shade, fontSize: 18 }),
+            tc(p.lastName || '', { shading: shade, fontSize: 18 }),
+            tc(p.title || '', { shading: shade, fontSize: 18 }),
+            tc(p.department || '', { shading: shade, fontSize: 18 }),
+            tc(p.eid || '', { shading: shade, fontSize: 18 }),
+          ];
+          if (showDateCol) cells.push(tc(p.attendedDate ? formatDate(p.attendedDate) : '', { shading: shade, fontSize: 18 }));
+          return new TableRow({ cantSplit: true, children: cells });
+        });
+        return new Table({ rows: [header, ...body], width: { size: 100, type: WidthType.PERCENTAGE } });
+      }
+
+      if (singleDocx) {
+        children.push(docxParticipantTable(rostersDocx[0].rows));
+      } else {
+        rostersDocx.forEach(function(roster, ri) {
+          if (ri > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
           children.push(new Paragraph({
             heading: HeadingLevel.HEADING_2,
-            children: [new TextRun({ text: nm + (dateLbl ? ' — ' + dateLbl : '') + ' (' + assigned.length + ')', bold: true, color: secondaryHex, font: fontName, size: 24 })],
+            children: [new TextRun({ text: roster.title + ' (' + roster.rows.length + ')', bold: true, color: secondaryHex, font: fontName, size: 24 })],
             spacing: { after: 80 }
           }));
-          if (assigned.length === 0) {
-            children.push(new Paragraph({ children: [new TextRun({ text: 'No participants assigned to this location.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 100 } }));
+          if (roster.rows.length === 0) {
+            children.push(new Paragraph({ children: [new TextRun({ text: 'No participants assigned.', size: 22, font: fontName, italics: true, color: '718096' })], spacing: { after: 100 } }));
           } else {
-            var subHeader = new TableRow({
-              tableHeader: true,
-              cantSplit: true,
-              children: [thCell('#', 5), thCell('First Name', 18), thCell('Last Name', 18), thCell('Title/Role', 22), thCell('Department', 18), thCell('Email', 19)],
-            });
-            var subRows = assigned.map(function(p, ai) {
-              var shade = ai % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
-              return new TableRow({
-                cantSplit: true,
-                children: [
-                  tc(String(ai + 1), { shading: shade, fontSize: 18 }),
-                  tc(p.firstName || '', { shading: shade, fontSize: 18 }),
-                  tc(p.lastName || '', { shading: shade, fontSize: 18 }),
-                  tc(p.title || '', { shading: shade, fontSize: 18 }),
-                  tc(p.department || '', { shading: shade, fontSize: 18 }),
-                  tc(p.email || '', { shading: shade, fontSize: 18 }),
-                ],
-              });
-            });
-            children.push(new Table({ rows: [subHeader, ...subRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
+            children.push(docxParticipantTable(roster.rows));
           }
         });
-      } else {
-        // Single list (no location/date split needed)
-        var pHeader = new TableRow({
-          tableHeader: true,
-          cantSplit: true,
-          children: [thCell('#', 6), thCell('First Name', 20), thCell('Last Name', 20), thCell('Title/Role', 22), thCell('Department', 16), thCell('Email', 16)],
-        });
-        var pRows = state.participants.map(function(p, i) {
-          var shade = i % 2 === 0 ? 'F7FAFC' : 'FFFFFF';
-          return new TableRow({
-            cantSplit: true,
-            children: [
-              tc(String(i + 1), { shading: shade, fontSize: 18 }),
-              tc(p.firstName || '', { shading: shade, fontSize: 18 }),
-              tc(p.lastName || '', { shading: shade, fontSize: 18 }),
-              tc(p.title || '', { shading: shade, fontSize: 18 }),
-              tc(p.department || '', { shading: shade, fontSize: 18 }),
-              tc(p.email || '', { shading: shade, fontSize: 18 }),
-            ],
-          });
-        });
-        children.push(new Table({ rows: [pHeader, ...pRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
       }
     } // end hasParticipants
 
@@ -5118,10 +5321,10 @@ async function generateLongDOCX() {
         for (var li2 = 0; li2 < grp.files.length; li2++) {
           var f = grp.files[li2];
           var firstInGroup = li2 === 0;
-          if (!firstInGroup) children.push(new Paragraph({ children: [new PageBreak()] }));
           fiGlobal++;
           children.push(new Paragraph({
             heading: HeadingLevel.HEADING_2,
+            pageBreakBefore: !firstInGroup,
             children: [new TextRun({ text: 'D.' + fiGlobal + ' — ' + f.name, bold: true, color: secondaryHex, font: fontName, size: 26 })],
             spacing: { before: 160, after: 140 }
         }));
@@ -5148,12 +5351,14 @@ async function generateLongDOCX() {
               var ratio = Math.min(maxWidthPx / viewport.width, maxHeightPx / viewport.height, 1);
               var w = Math.round(viewport.width * ratio);
               var h = Math.round(viewport.height * ratio);
+              // Every page after the first gets a page break BEFORE it — eliminates the empty
+              // PageBreak-only paragraph that was producing blank pages between images.
               children.push(new Paragraph({
                 alignment: AlignmentType.CENTER,
-                spacing: { after: 60 },
+                pageBreakBefore: pn > 1,
+                spacing: { after: 0 },
                 children: [new ImageRun({ data: pngArr, transformation: { width: w, height: h }, type: 'png' })]
               }));
-              if (pn < pdfDoc.numPages) children.push(new Paragraph({ children: [new PageBreak()] }));
             }
           } catch (pdfErr) {
             console.error('PDF append failed for', f.name, pdfErr);
@@ -5793,6 +5998,29 @@ function formatDate(dateStr) {
   } catch (e) { return dateStr; }
 }
 
+// Best-effort date normalization from imported spreadsheet cells → 'YYYY-MM-DD' or ''.
+function normalizeImportDate(raw) {
+  if (!raw) return '';
+  var s = String(raw).trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  var mdY = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2}|\d{4})$/);
+  if (mdY) {
+    var mm = String(parseInt(mdY[1],10)).padStart(2,'0');
+    var dd = String(parseInt(mdY[2],10)).padStart(2,'0');
+    var yy = mdY[3].length === 2 ? ('20' + mdY[3]) : mdY[3];
+    return yy + '-' + mm + '-' + dd;
+  }
+  var d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2,'0');
+    var day = String(d.getDate()).padStart(2,'0');
+    return y + '-' + m + '-' + day;
+  }
+  return '';
+}
+
 function showToast(msg, type) {
   var t = document.getElementById('toast');
   t.textContent = msg;
@@ -5913,10 +6141,24 @@ document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
 
 // Keyboard nav — Enter to submit participant
 // Enter from any participant field submits
-['pFirstName', 'pLastName', 'pTitle', 'pDept', 'pEmail'].forEach(function(id) {
+['pFirstName', 'pLastName', 'pTitle', 'pDept', 'pEid', 'pDate'].forEach(function(id) {
   var el = document.getElementById(id);
   if (el) el.addEventListener('keypress', function(e) { if (e.key === 'Enter') { e.preventDefault(); addParticipant(); } });
 });
+
+// Sidebar collapse: user preference persisted to localStorage.
+var SIDEBAR_COLLAPSED_KEY = 'aarSidebarCollapsed';
+function applySidebarCollapsed(collapsed) {
+  document.body.classList.toggle('sidebar-collapsed', !!collapsed);
+}
+function toggleSidebar() {
+  var next = !document.body.classList.contains('sidebar-collapsed');
+  applySidebarCollapsed(next);
+  try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0'); } catch(e) {}
+}
+(function restoreSidebar() {
+  try { if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1') applySidebarCollapsed(true); } catch(e) {}
+})();
 var _anEl = document.getElementById('actionNotes'); if (_anEl) _anEl.addEventListener('keypress', function(e) { if (e.key === 'Enter') addActionItem(); });
 var _adEl = document.getElementById('actionDesc'); if (_adEl) _adEl.addEventListener('keypress', function(e) { if (e.key === 'Enter') addActionItem(); });
 
