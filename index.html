@@ -4351,7 +4351,13 @@ function splitOverflowingPage(page) {
 
   page.parentNode.insertBefore(nextPage, page.nextSibling);
 
-  // Move trailing children (and/or split tables) until the original page fits
+  // Move trailing children (and/or split tables) until the original page fits.
+  // Each moved element is inserted at the TOP of the continuation page (after
+  // label / any previously moved items' "anchor"), so source order is preserved
+  // even though we walk the original page back-to-front.
+  function topInsertionPoint() {
+    return label ? label.nextSibling : nextPage.firstChild;
+  }
   while (page.scrollHeight > page.clientHeight + 4 && kids.length > 0) {
     var last = kids[kids.length - 1];
     if (last.tagName === 'TABLE' && last.rows && last.rows.length > 2) {
@@ -4360,11 +4366,10 @@ function splitOverflowingPage(page) {
       if (moved) continue;
       // Couldn't split (e.g., header + 1 row) — fall through to full move
     }
-    // Move the entire element to the next page
+    // Move the entire element to the next page, inserted at the top of content
     last.remove();
     kids.pop();
-    if (filler) nextPage.insertBefore(last, filler);
-    else nextPage.appendChild(last);
+    nextPage.insertBefore(last, topInsertionPoint());
   }
 
   // If nothing moved (table couldn't shrink enough), bail out to avoid infinite loop
