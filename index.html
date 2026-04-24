@@ -4345,7 +4345,8 @@ function splitOverflowingPage(page) {
   // Build the continuation page
   var nextPage = document.createElement('section');
   nextPage.className = page.className;
-  if (label) nextPage.appendChild(label.cloneNode(true));
+  var nextLabel = null;
+  if (label) { nextLabel = label.cloneNode(true); nextPage.appendChild(nextLabel); }
   // Filler is the last element — move it to the new page (it's supposed to be the end-of-section marker)
   if (filler) { filler.remove(); nextPage.appendChild(filler); }
 
@@ -4353,10 +4354,13 @@ function splitOverflowingPage(page) {
 
   // Move trailing children (and/or split tables) until the original page fits.
   // Each moved element is inserted at the TOP of the continuation page (after
-  // label / any previously moved items' "anchor"), so source order is preserved
-  // even though we walk the original page back-to-front.
+  // the cloned label) so source order is preserved even though we walk the
+  // original page back-to-front. Reference node must be a child of nextPage
+  // or insertBefore throws.
   function topInsertionPoint() {
-    return label ? label.nextSibling : nextPage.firstChild;
+    if (nextLabel && nextLabel.nextSibling) return nextLabel.nextSibling;
+    if (!nextLabel) return nextPage.firstChild;
+    return null; // append
   }
   while (page.scrollHeight > page.clientHeight + 4 && kids.length > 0) {
     var last = kids[kids.length - 1];
@@ -4373,7 +4377,7 @@ function splitOverflowingPage(page) {
   }
 
   // If nothing moved (table couldn't shrink enough), bail out to avoid infinite loop
-  var nextKids = Array.from(nextPage.children).filter(function(el) { return el !== label && el !== filler; });
+  var nextKids = Array.from(nextPage.children).filter(function(el) { return el !== nextLabel && el !== filler; });
   if (nextKids.length === 0 && !filler) {
     nextPage.remove();
     return false;
