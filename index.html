@@ -4390,21 +4390,26 @@ function splitOverflowingPage(page) {
 function moveTableOverflowRows(page, tbl, nextPage) {
   var headerRow = tbl.rows[0];
   if (!headerRow) return false;
-  // Find or create the continuation table on nextPage (insert as a new element at top after label)
+
+  // Each original table gets a unique origin id on first split; continuations inherit
+  // it so we never merge rows from a different source table into an existing cont.
+  if (!tbl.dataset.splitOriginId) {
+    tbl.dataset.splitOriginId = 'tbl_' + Math.random().toString(36).slice(2, 10);
+  }
+  var originId = tbl.dataset.splitOriginId;
+
   var filler = nextPage.querySelector(':scope > .preview-filler');
-  var existing = null;
-  // If the first non-label/non-filler child is a table marked as continuation of this one, reuse
-  var firstKid = Array.from(nextPage.children).find(function(el) {
-    return el.tagName === 'TABLE' && el.dataset.splitContinuation === '1';
-  });
-  existing = firstKid || null;
+  var existing = Array.from(nextPage.children).find(function(el) {
+    return el.tagName === 'TABLE' && el.dataset.splitContinuation === originId;
+  }) || null;
 
   var cont;
   if (existing) {
     cont = existing;
   } else {
     cont = document.createElement('table');
-    cont.dataset.splitContinuation = '1';
+    cont.dataset.splitContinuation = originId;
+    cont.dataset.splitOriginId = originId; // so further splits on this cont match too
     var tbodyNew = document.createElement('tbody');
     cont.appendChild(tbodyNew);
     tbodyNew.appendChild(headerRow.cloneNode(true));
@@ -4520,73 +4525,69 @@ function refreshShortPreview() {
     return '<section class="preview-page portrait"><span class="page-label">Portrait</span>' + contents + fillerBlock() + '</section>';
   }
 
-  // Build document body (single portrait flow; pagination splits overflow)
-  var body = '';
-
-  // Header block
-  body += '<div style="margin-bottom:20px;">';
-  body += '<p><strong>Exercise Type:</strong> ' + esc(state.eventType) + '</p>';
-  body += '<p><strong>Focus:</strong> ' + esc(state.eventFocus) + '</p>';
-  if (state.facilitator) body += '<p><strong>Facilitator:</strong> ' + esc(state.facilitator) + (state.facilitatorTitle ? ', ' + esc(state.facilitatorTitle) : '') + '</p>';
-  if (state.eventDepartment) body += '<p><strong>Department:</strong> ' + esc(state.eventDepartment) + '</p>';
-  body += '<p><strong>Location:</strong> ' + esc(facName) + '</p>';
-  body += '<p><strong>Date:</strong> ' + dateStr + (state.eventTime ? ' - ' + esc(state.eventTime) : '') + '</p>';
-  body += '</div>';
-
-  body += '<h2>After-Action Report</h2>';
-
-  // Overview
-  body += '<h2>OVERVIEW</h2>';
-  if (state.goal) body += '<p><strong>Goal:</strong> ' + esc(state.goal) + '</p>';
-  if (state.purpose) body += '<p><strong>Purpose:</strong> ' + esc(state.purpose) + '</p>';
-  if (state.drillDuration) body += '<p><strong>Drill Duration:</strong> ' + esc(state.drillDuration) + '</p>';
-  if (state.shortObjectives.length > 0) {
-    body += '<p><strong>Objectives:</strong></p><ul>';
-    state.shortObjectives.forEach(function(o) { if (o) body += '<li>' + esc(o) + '</li>'; });
-    body += '</ul>';
-  }
-
-  // Findings
-  body += '<h2>FINDINGS, RECOMMENDATIONS AND RATIONALES</h2>';
-  if (state.findings.length === 0) { body += '<p style="color:var(--gray-500);">No findings.</p>'; }
-  state.findings.forEach(function(f) {
-    body += '<h3>Finding ' + esc(f.letter) + ': ' + esc(f.title) + '</h3>';
-    if (f.description) body += '<p>' + esc(f.description) + '</p>';
-    if (f.recommendation) body += '<p><strong>Recommendation:</strong> ' + esc(f.recommendation) + '</p>';
-  });
-
-  // Timeline
-  body += '<h2>TIMELINE</h2>';
-  if (state.timeline.length > 0) {
-    body += '<table><tr><th>Time</th><th>Elapsed</th><th>Event</th><th>Notes/Owner</th></tr>';
-    state.timeline.forEach(function(t) {
-      body += '<tr><td>' + esc(t.time) + '</td><td>' + esc(t.elapsed) + '</td><td>' + esc(t.event) + '</td><td>' + esc(t.notes) + '</td></tr>';
-    });
-    body += '</table>';
-  } else { body += '<p style="color:var(--gray-500);">No timeline entries.</p>'; }
-
-  // Corrective Actions
-  body += '<h2>CORRECTIVE ACTIONS & TASK TRACKING</h2>';
-  if (state.correctiveActions.length > 0) {
-    body += '<table><tr><th>Finding</th><th>JC Critical Area(s)</th><th>Task</th><th>Responsible Dept.</th><th>Target Deadline</th></tr>';
-    state.correctiveActions.forEach(function(ca) {
-      body += '<tr><td>' + esc(ca.finding) + '</td><td>' + esc(ca.jcAreas) + '</td><td>' + esc(ca.task) + '</td><td>' + esc(ca.responsibleDept) + '</td><td>' + esc(ca.targetDeadline) + '</td></tr>';
-    });
-    body += '</table>';
-  } else { body += '<p style="color:var(--gray-500);">No corrective actions.</p>'; }
-
-  // JC Reference
-  body += '<h3>JC Critical Areas Reference</h3>';
-  body += '<ol><li>Communications</li><li>Staffing</li><li>Patient Clinical and Support Services</li><li>Safety and Security</li><li>Resources and Assets</li><li>Utilities</li></ol>';
-
   var html = '';
   if (draft) html += '<div class="preview-draft-banner">DRAFT</div>';
-  html += page(body);
+
+  // Page 1: Header + Overview
+  var p1 = '<div style="margin-bottom:20px;">';
+  p1 += '<p><strong>Exercise Type:</strong> ' + esc(state.eventType) + '</p>';
+  p1 += '<p><strong>Focus:</strong> ' + esc(state.eventFocus) + '</p>';
+  if (state.facilitator) p1 += '<p><strong>Facilitator:</strong> ' + esc(state.facilitator) + (state.facilitatorTitle ? ', ' + esc(state.facilitatorTitle) : '') + '</p>';
+  if (state.eventDepartment) p1 += '<p><strong>Department:</strong> ' + esc(state.eventDepartment) + '</p>';
+  p1 += '<p><strong>Location:</strong> ' + esc(facName) + '</p>';
+  p1 += '<p><strong>Date:</strong> ' + dateStr + (state.eventTime ? ' - ' + esc(state.eventTime) : '') + '</p>';
+  p1 += '</div>';
+  p1 += '<h2>After-Action Report</h2>';
+  p1 += '<h2>OVERVIEW</h2>';
+  if (state.goal) p1 += '<p><strong>Goal:</strong> ' + esc(state.goal) + '</p>';
+  if (state.purpose) p1 += '<p><strong>Purpose:</strong> ' + esc(state.purpose) + '</p>';
+  if (state.drillDuration) p1 += '<p><strong>Drill Duration:</strong> ' + esc(state.drillDuration) + '</p>';
+  if (state.shortObjectives.length > 0) {
+    p1 += '<p><strong>Objectives:</strong></p><ul>';
+    state.shortObjectives.forEach(function(o) { if (o) p1 += '<li>' + esc(o) + '</li>'; });
+    p1 += '</ul>';
+  }
+  html += page(p1);
+
+  // Findings
+  var pf_ = '<h2>FINDINGS, RECOMMENDATIONS AND RATIONALES</h2>';
+  if (state.findings.length === 0) { pf_ += '<p style="color:var(--gray-500);">No findings.</p>'; }
+  state.findings.forEach(function(f) {
+    pf_ += '<h3>Finding ' + esc(f.letter) + ': ' + esc(f.title) + '</h3>';
+    if (f.description) pf_ += '<p>' + esc(f.description) + '</p>';
+    if (f.recommendation) pf_ += '<p><strong>Recommendation:</strong> ' + esc(f.recommendation) + '</p>';
+  });
+  html += page(pf_);
+
+  // Timeline
+  var pt = '<h2>TIMELINE</h2>';
+  if (state.timeline.length > 0) {
+    pt += '<table><tr><th>Time</th><th>Elapsed</th><th>Event</th><th>Notes/Owner</th></tr>';
+    state.timeline.forEach(function(t) {
+      pt += '<tr><td>' + esc(t.time) + '</td><td>' + esc(t.elapsed) + '</td><td>' + esc(t.event) + '</td><td>' + esc(t.notes) + '</td></tr>';
+    });
+    pt += '</table>';
+  } else { pt += '<p style="color:var(--gray-500);">No timeline entries.</p>'; }
+  html += page(pt);
+
+  // Corrective Actions + JC Reference
+  var pc = '<h2>CORRECTIVE ACTIONS & TASK TRACKING</h2>';
+  if (state.correctiveActions.length > 0) {
+    pc += '<table><tr><th>Finding</th><th>JC Critical Area(s)</th><th>Task</th><th>Responsible Dept.</th><th>Target Deadline</th></tr>';
+    state.correctiveActions.forEach(function(ca) {
+      pc += '<tr><td>' + esc(ca.finding) + '</td><td>' + esc(ca.jcAreas) + '</td><td>' + esc(ca.task) + '</td><td>' + esc(ca.responsibleDept) + '</td><td>' + esc(ca.targetDeadline) + '</td></tr>';
+    });
+    pc += '</table>';
+  } else { pc += '<p style="color:var(--gray-500);">No corrective actions.</p>'; }
+  pc += '<h3>JC Critical Areas Reference</h3>';
+  pc += '<ol><li>Communications</li><li>Staffing</li><li>Patient Clinical and Support Services</li><li>Safety and Security</li><li>Resources and Assets</li><li>Utilities</li></ol>';
+  html += page(pc);
+
   if (draft) html += '<div class="preview-draft-banner bottom">DRAFT</div>';
 
   c.innerHTML = html;
 
-  // Split any oversized pages across portrait continuation pages
+  // Split any oversized sections across portrait continuation pages
   paginatePreview(c);
 }
 
